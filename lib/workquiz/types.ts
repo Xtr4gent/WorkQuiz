@@ -62,11 +62,22 @@ export interface CreateBracketInput {
   title: string;
   seedingMode: SeedingMode;
   entrants: string[];
+  seededEntrants?: string[];
   startsAt: string;
   endsAt?: string;
   totalPlayers: number;
   roundDurationHours?: number;
   revoteDurationHours?: number;
+}
+
+export interface AdminHistoryItem {
+  id: string;
+  title: string;
+  winnerName: string;
+  completedAt: string;
+  entrantNames: string[];
+  totalPlayers: number;
+  seedingMode: SeedingMode;
 }
 
 export interface BracketSnapshotEntrant {
@@ -121,4 +132,5 @@ export interface BracketSnapshot {
   currentRoundId: string | null;
   currentRoundUniqueVoters: number;
   totalVotes: number;
+  adminHistory?: AdminHistoryItem[];
 }

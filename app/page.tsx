@@ -1,6 +1,16 @@
 import { CreateBracketForm } from "@/components/CreateBracketForm";
+import { findBracketByAdminToken, findBracketById } from "@/lib/workquiz/bracket";
 
-export default function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ template?: string; adminToken?: string }>;
+}) {
+  const params = await searchParams;
+  const authorizedAdmin = params.adminToken ? findBracketByAdminToken(params.adminToken) : null;
+  const templateBracket =
+    authorizedAdmin && params.template ? findBracketById(params.template) : null;
+
   return (
     <main className="shell landing-shell">
       <section className="hero">
@@ -18,7 +28,19 @@ export default function HomePage() {
             <span>One vote per browser</span>
           </div>
         </div>
-        <CreateBracketForm />
+        <CreateBracketForm
+          initialTemplate={
+            templateBracket
+              ? {
+                  title: templateBracket.title,
+                  entrants: templateBracket.entrants.map((entrant) => entrant.name),
+                  totalPlayers: templateBracket.totalPlayers,
+                  seedingMode: templateBracket.seedingMode,
+                  sourceTitle: templateBracket.title,
+                }
+              : null
+          }
+        />
       </section>
     </main>
   );

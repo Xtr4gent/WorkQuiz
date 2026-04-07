@@ -3,12 +3,13 @@ import test from "node:test";
 
 import {
   advanceBracket,
+  buildPreviewSnapshot,
   buildSnapshot,
   castVote,
   createBracket,
   restartBracket,
 } from "@/lib/workquiz/bracket";
-import { ensureStore, writeStore } from "@/lib/workquiz/store";
+import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
 
 function resetStore() {
   ensureStore();
@@ -200,4 +201,55 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
   assert.equal(bracket.rounds[0].matchups[0].votes.length, 0);
   assert.equal(bracket.rounds[0].matchups[0].winnerEntrantId, null);
   assert.equal(bracket.rounds[1].matchups[0].entrantAId, null);
+});
+
+test("buildPreviewSnapshot preserves a provided random preview seed order", () => {
+  resetStore();
+  const snapshot = buildPreviewSnapshot({
+    title: "Chocolate Bar Showdown",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    seededEntrants: ["Aero", "Twix", "Mars", "Kit Kat"],
+    seedingMode: "random",
+    startsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    totalPlayers: 20,
+  });
+
+  assert.equal(snapshot.entrants[0].name, "Aero");
+  assert.equal(snapshot.rounds[0].matchups[0].entrantA?.name, "Aero");
+});
+
+test("admin snapshot includes previous completed topics and winners", () => {
+  resetStore();
+  const { bracket: current } = createBracket({
+    title: "Current Bracket",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    startsAt: new Date().toISOString(),
+    totalPlayers: 20,
+    roundDurationHours: 1,
+  });
+
+  const { bracket: previous, adminToken } = createBracket({
+    title: "Previous Bracket",
+    seedingMode: "manual",
+    entrants: ["Kit Kat", "Aero"],
+    startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    totalPlayers: 20,
+    roundDurationHours: 1,
+  });
+
+  const store = readStore();
+  const storedPrevious = store.brackets.find((entry) => entry.id === previous.id)!;
+  storedPrevious.rounds[0].matchups[0].winnerEntrantId = storedPrevious.rounds[0].matchups[0].entrantAId;
+  storedPrevious.rounds[0].matchups[0].status = "closed";
+  storedPrevious.rounds[0].status = "closed";
+  storedPrevious.status = "completed";
+  writeStore(store);
+
+  const snapshot = buildSnapshot(current, { includeAdminUrl: true, adminToken });
+
+  assert.equal(snapshot.adminHistory?.length, 1);
+  assert.equal(snapshot.adminHistory?.[0].title, "Previous Bracket");
+  assert.equal(snapshot.adminHistory?.[0].winnerName, "Kit Kat");
 });

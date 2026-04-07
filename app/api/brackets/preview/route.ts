@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createBracket } from "@/lib/workquiz/bracket";
+import { buildPreviewSnapshot } from "@/lib/workquiz/bracket";
 import { DEFAULT_ROUND_DURATION_HOURS } from "@/lib/workquiz/constants";
 import { parseEntrantsFromText } from "@/lib/workquiz/utils";
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   if (entrants.length < 2) {
     return NextResponse.json(
-      { error: "Add at least two entrants to create a bracket." },
+      { error: "Add at least two entrants to preview the bracket." },
       { status: 400 },
     );
   }
@@ -46,21 +46,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const totalPlayers = Number(body.totalPlayers);
-
-  const { bracket, adminToken } = createBracket({
-    title: body.title.trim(),
-    entrants,
-    seededEntrants: body.seededEntrants,
-    seedingMode: body.seedingMode ?? "manual",
-    startsAt: body.startsAt ?? new Date().toISOString(),
-    endsAt: body.endsAt,
-    totalPlayers,
-    roundDurationHours: body.roundDurationHours ?? DEFAULT_ROUND_DURATION_HOURS,
-  });
-
-  return NextResponse.json({
-    publicUrl: `/b/${bracket.publicToken}`,
-    adminUrl: `/admin/${adminToken}`,
-  });
+  return NextResponse.json(
+    buildPreviewSnapshot({
+      title: body.title.trim(),
+      entrants,
+      seededEntrants: body.seededEntrants,
+      seedingMode: body.seedingMode ?? "manual",
+      startsAt: body.startsAt ?? new Date().toISOString(),
+      endsAt: body.endsAt,
+      totalPlayers: Number(body.totalPlayers),
+      roundDurationHours: body.roundDurationHours ?? DEFAULT_ROUND_DURATION_HOURS,
+    }),
+  );
 }

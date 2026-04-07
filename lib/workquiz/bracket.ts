@@ -7,6 +7,7 @@ import {
 import { publish } from "@/lib/workquiz/realtime";
 import { readStore, updateStore, writeStore } from "@/lib/workquiz/store";
 import {
+  AdminHistoryItem,
   BracketRecord,
   BracketSnapshot,
   CreateBracketInput,
@@ -50,6 +51,41 @@ function labelForRound(roundNumber: number, totalRounds: number) {
   }
 
   return `Round ${roundNumber}`;
+}
+
+function winnerNameForBracket(bracket: BracketRecord) {
+  const lastRound = bracket.rounds.at(-1);
+  const finalMatchup = lastRound?.matchups.at(0);
+  const winnerEntrantId = finalMatchup?.winnerEntrantId;
+  if (!winnerEntrantId) {
+    return null;
+  }
+
+  return bracket.entrants.find((entrant) => entrant.id === winnerEntrantId)?.name ?? null;
+}
+
+function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
+  return readStore()
+    .brackets
+    .filter((bracket) => bracket.id !== activeBracketId && bracket.status === "completed")
+    .map((bracket) => {
+      const winnerName = winnerNameForBracket(bracket);
+      if (!winnerName) {
+        return null;
+      }
+
+      return {
+        id: bracket.id,
+        title: bracket.title,
+        winnerName,
+        completedAt: bracket.rounds.at(-1)?.endsAt ?? bracket.publishedAt,
+        entrantNames: bracket.entrants.map((entrant) => entrant.name),
+        totalPlayers: bracket.totalPlayers,
+        seedingMode: bracket.seedingMode,
+      };
+    })
+    .filter((item): item is AdminHistoryItem => item !== null)
+    .sort((left, right) => new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime());
 }
 
 function buildRoundsForBracket(bracket: BracketRecord, startsAt: string, roundDurationHours: number) {
@@ -185,7 +221,12 @@ export function resolveAutomaticWinners(bracket: BracketRecord) {
 }
 
 export function createBracket(input: CreateBracketInput) {
-  const sourceEntrants = input.seedingMode === "random" ? shuffle(input.entrants) : input.entrants;
+  const sourceEntrants =
+    input.seededEntrants?.length === input.entrants.length
+      ? input.seededEntrants
+      : input.seedingMode === "random"
+        ? shuffle(input.entrants)
+        : input.entrants;
   const roundDurationHours = deriveRoundDurationHours(input);
   const entrants = sourceEntrants.map<EntrantRecord>((name, index) => ({
     id: nanoid(),
@@ -501,5 +542,47 @@ export function buildSnapshot(
     currentRoundId: currentRoundRecord?.id ?? null,
     currentRoundUniqueVoters,
     totalVotes,
+    adminHistory: options?.includeAdminUrl ? buildAdminHistory(bracket.id) : undefined,
   };
+}
+
+export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot {
+  const sourceEntrants =
+    input.seededEntrants?.length === input.entrants.length
+      ? input.seededEntrants
+      : input.seedingMode === "random"
+        ? shuffle(input.entrants)
+        : input.entrants;
+  const previewBracket: BracketRecord = {
+    id: `preview-${nanoid(8)}`,
+    title: input.title.trim(),
+    slug: slugify(input.title) || `preview-${nanoid(4)}`,
+    status: "live",
+    publicToken: `preview-${nanoid(8)}`,
+    adminTokenHash: "preview",
+    seedingMode: input.seedingMode,
+    createdAt: new Date().toISOString(),
+    publishedAt: new Date().toISOString(),
+    totalPlayers: input.totalPlayers,
+    roundDurationHours: deriveRoundDurationHours(input),
+    revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
+    entrants: sourceEntrants.map<EntrantRecord>((name, index) => ({
+      id: `preview-entrant-${index + 1}`,
+      name,
+      seed: index + 1,
+    })),
+    rounds: [],
+  };
+
+  previewBracket.rounds = buildRoundsForBracket(
+    previewBracket,
+    input.startsAt,
+    previewBracket.roundDurationHours,
+  );
+
+  return buildSnapshot(previewBracket);
+}
+
+export function findBracketById(bracketId: string) {
+  return readStore().brackets.find((bracket) => bracket.id === bracketId) ?? null;
 }

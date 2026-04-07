@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { BracketSnapshot, SeedingMode } from "@/lib/workquiz/types";
 import { parseEntrantsFromText } from "@/lib/workquiz/utils";
 
 const roundDurationHours = 24 * 7;
@@ -19,27 +20,137 @@ function move(items: string[], from: number, to: number) {
   return next;
 }
 
-export function CreateBracketForm() {
+function shufflePreview(items: string[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swap]] = [next[swap], next[index]];
+  }
+  return next;
+}
+
+export function CreateBracketForm({
+  initialTemplate,
+}: {
+  initialTemplate?: {
+    title: string;
+    entrants: string[];
+    totalPlayers: number;
+    seedingMode: SeedingMode;
+    sourceTitle?: string;
+  } | null;
+}) {
   const router = useRouter();
-  const [title, setTitle] = useState("Best Chocolate Bar");
-  const [totalPlayers, setTotalPlayers] = useState("20");
+  const [title, setTitle] = useState(initialTemplate?.title ?? "Best Chocolate Bar");
+  const [totalPlayers, setTotalPlayers] = useState(String(initialTemplate?.totalPlayers ?? 20));
   const [entrantsText, setEntrantsText] = useState(
-    "Mars\nKit Kat\nCoffee Crisp\nReese's\nTwix\nSnickers\nOh Henry!\nAero",
+    initialTemplate?.entrants.join("\n") ??
+      "Mars\nKit Kat\nCoffee Crisp\nReese's\nTwix\nSnickers\nOh Henry!\nAero",
   );
-  const [seedingMode, setSeedingMode] = useState<"manual" | "random">("manual");
+  const [seedingMode, setSeedingMode] = useState<SeedingMode>(initialTemplate?.seedingMode ?? "manual");
   const [startsAt, setStartsAt] = useState(() =>
     toLocalDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)),
   );
   const [endsAt, setEndsAt] = useState(() =>
     toLocalDateTimeValue(new Date(Date.now() + (30 + roundDurationHours * 60) * 60 * 1000)),
   );
+  const [previewSeededEntrants, setPreviewSeededEntrants] = useState<string[]>(() =>
+    initialTemplate?.seedingMode === "random"
+      ? shufflePreview(initialTemplate.entrants)
+      : initialTemplate?.entrants ?? parseEntrantsFromText(entrantsText),
+  );
   const [error, setError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState<BracketSnapshot | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const entrants = useMemo(() => parseEntrantsFromText(entrantsText), [entrantsText]);
+  const previewIsValid = useMemo(() => {
+    const startsAtIso = new Date(startsAt).toISOString();
+    const endsAtIso = new Date(endsAt).toISOString();
+    const totalPlayersValue = Number(totalPlayers);
+
+    return (
+      !!title.trim() &&
+      entrants.length >= 2 &&
+      !Number.isNaN(new Date(startsAtIso).getTime()) &&
+      !Number.isNaN(new Date(endsAtIso).getTime()) &&
+      new Date(endsAtIso).getTime() > new Date(startsAtIso).getTime() &&
+      Number.isInteger(totalPlayersValue) &&
+      totalPlayersValue >= 2
+    );
+  }, [endsAt, entrants.length, startsAt, title, totalPlayers]);
+
+  useEffect(() => {
+    if (!previewIsValid) {
+      return;
+    }
+
+    const startsAtIso = new Date(startsAt).toISOString();
+    const endsAtIso = new Date(endsAt).toISOString();
+    const totalPlayersValue = Number(totalPlayers);
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsPreviewLoading(true);
+      const response = await fetch("/api/brackets/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          entrants,
+          seededEntrants: previewSeededEntrants,
+          seedingMode,
+          startsAt: startsAtIso,
+          endsAt: endsAtIso,
+          totalPlayers: totalPlayersValue,
+        }),
+        signal: controller.signal,
+      }).catch(() => null);
+
+      if (!response) {
+        setIsPreviewLoading(false);
+        return;
+      }
+
+      const result = (await response.json()) as BracketSnapshot & { error?: string };
+      if (!response.ok) {
+        setPreviewSnapshot(null);
+        setPreviewError(result.error ?? "Could not render the preview yet.");
+        setIsPreviewLoading(false);
+        return;
+      }
+
+      setPreviewSnapshot(result);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+    }, 150);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [endsAt, entrants, previewIsValid, previewSeededEntrants, seedingMode, startsAt, title, totalPlayers]);
 
   function updateEntrants(next: string[]) {
     setEntrantsText(next.join("\n"));
+    setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(next) : next);
+  }
+
+  function reshufflePreview() {
+    setPreviewSeededEntrants(shufflePreview(entrants));
+  }
+
+  function handleEntrantsTextChange(value: string) {
+    setEntrantsText(value);
+    const nextEntrants = parseEntrantsFromText(value);
+    setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(nextEntrants) : nextEntrants);
+  }
+
+  function handleSeedingModeChange(nextMode: SeedingMode) {
+    setSeedingMode(nextMode);
+    setPreviewSeededEntrants(nextMode === "random" ? shufflePreview(entrants) : entrants);
   }
 
   async function handleSubmit(formData: FormData) {
@@ -47,6 +158,7 @@ export function CreateBracketForm() {
     const payload = {
       title: String(formData.get("title") ?? ""),
       entrants,
+      seededEntrants: previewSeededEntrants,
       seedingMode,
       startsAt: new Date(String(formData.get("startsAt"))).toISOString(),
       endsAt: new Date(String(formData.get("endsAt"))).toISOString(),
@@ -86,9 +198,12 @@ export function CreateBracketForm() {
         <span className="eyebrow">Start A Bracket</span>
         <h2>Make the next office showdown in under ten minutes.</h2>
         <p className="muted">
-          Paste the entrants, set the round one start, and choose whether you want a
-          strict seed order or a totally chaotic draw.
+          Paste the entrants, set the round one start, and preview the full board before
+          anything goes live.
         </p>
+        {initialTemplate?.sourceTitle ? (
+          <p className="muted">Loaded from previous topic: {initialTemplate.sourceTitle}</p>
+        ) : null}
       </div>
 
       <label className="field">
@@ -134,25 +249,30 @@ export function CreateBracketForm() {
         <textarea
           rows={10}
           value={entrantsText}
-          onChange={(event) => setEntrantsText(event.target.value)}
+          onChange={(event) => handleEntrantsTextChange(event.target.value)}
         />
       </label>
 
       <div className="seed-mode">
         <button
           className={seedingMode === "manual" ? "pill active" : "pill"}
-          onClick={() => setSeedingMode("manual")}
+          onClick={() => handleSeedingModeChange("manual")}
           type="button"
         >
           Manual seeding
         </button>
         <button
           className={seedingMode === "random" ? "pill active" : "pill"}
-          onClick={() => setSeedingMode("random")}
+          onClick={() => handleSeedingModeChange("random")}
           type="button"
         >
           Random draw
         </button>
+        {seedingMode === "random" ? (
+          <button className="pill" onClick={reshufflePreview} type="button">
+            Reshuffle preview
+          </button>
+        ) : null}
       </div>
 
       {seedingMode === "manual" ? (
@@ -189,6 +309,66 @@ export function CreateBracketForm() {
           </div>
         </div>
       ) : null}
+
+      <section className="preview-panel stack-sm">
+        <div className="inline-row">
+          <div className="stack-sm">
+            <span className="eyebrow">Live Preview</span>
+            <h3>Check the full bracket before you create it.</h3>
+          </div>
+          {isPreviewLoading ? <span className="muted">Updating preview...</span> : null}
+        </div>
+
+        {previewIsValid && previewError ? <p className="error-text">{previewError}</p> : null}
+
+        {previewIsValid && previewSnapshot ? (
+          <div className="stack-md">
+            <div className="preview-summary">
+              <strong>{previewSnapshot.title}</strong>
+              <span className="muted">
+                {previewSnapshot.totalPlayers} players, {previewSnapshot.rounds.length} rounds
+              </span>
+            </div>
+            <div className="round-grid">
+              {previewSnapshot.rounds.map((round) => (
+                <article className="round-panel" key={round.id}>
+                  <div className="round-title">
+                    <div>
+                      <span className="eyebrow">Stage {round.number}</span>
+                      <h2>{round.label}</h2>
+                    </div>
+                  </div>
+                  <div className="matchup-list">
+                    {round.matchups.map((matchup) => (
+                      <div className="matchup-card" key={matchup.id}>
+                        <div className="entrant-button preview-entrant">
+                          <span>
+                            {matchup.entrantA
+                              ? `#${matchup.entrantA.seed} ${matchup.entrantA.name}`
+                              : "BYE"}
+                          </span>
+                        </div>
+                        <div className="entrant-button preview-entrant">
+                          <span>
+                            {matchup.entrantB
+                              ? `#${matchup.entrantB.seed} ${matchup.entrantB.name}`
+                              : "BYE"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="muted">
+            Add a title, at least two entrants, valid round timing, and total players to see the
+            full bracket preview.
+          </p>
+        )}
+      </section>
 
       {error ? <p className="error-text">{error}</p> : null}
 

@@ -181,6 +181,14 @@ export function BracketClient({
     return new URL(snapshot.adminUrl, window.location.origin).toString();
   }, [hydrated, snapshot.adminUrl]);
 
+  const reuseTemplateBase = useMemo(() => {
+    if (!adminToken) {
+      return null;
+    }
+
+    return `/?adminToken=${encodeURIComponent(adminToken)}`;
+  }, [adminToken]);
+
   const currentRoundBanner = useMemo(() => {
     if (!currentRound) {
       return {
@@ -341,6 +349,39 @@ export function BracketClient({
               </div>
             ) : null}
           </div>
+        </section>
+      ) : null}
+
+      {mode === "admin" ? (
+        <section className="panel stack-sm">
+          <div className="inline-row">
+            <h2>Previous topics</h2>
+            <span className="muted">Only admins see this history.</span>
+          </div>
+          {snapshot.adminHistory?.length ? (
+            <div className="history-list">
+              {snapshot.adminHistory.map((item) => (
+                <div className="history-item" key={item.id}>
+                  <div className="stack-sm">
+                    <strong>{item.title}</strong>
+                    <span className="muted">
+                      Winner: {item.winnerName} • {formatEasternDateTime(item.completedAt)}
+                    </span>
+                  </div>
+                  {reuseTemplateBase ? (
+                    <a
+                      className="secondary-button"
+                      href={`${reuseTemplateBase}&template=${encodeURIComponent(item.id)}`}
+                    >
+                      Reuse this topic
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">Previous winners will show up here once you finish a bracket.</p>
+          )}
         </section>
       ) : null}
 
