@@ -1,0 +1,58 @@
+{
+  "brackets": [
+    {
+      "id": "U_IGIF61UIYnvesWvMgU2",
+      "title": "Chocolate Bar Showdown",
+      "slug": "chocolate-bar-showdown",
+      "status": "live",
+      "publicToken": "YdIJOmh6shIi1Prs",
+      "adminTokenHash": "00450ccdeaeac105ddd2b3774f50d2167b44dbe5eebdf975a95e7a32d542d74f",
+      "seedingMode": "manual",
+      "createdAt": "2026-04-07T13:17:12.436Z",
+      "publishedAt": "2026-04-07T13:17:12.436Z",
+      "roundDurationHours": 1,
+      "revoteDurationHours": 24,
+      "entrants": [
+        {
+          "id": "OQCGMSv9YqjPE0FC3AkIU",
+          "name": "Mars",
+          "seed": 1
+        },
+        {
+          "id": "h2BAYI-Iwkoi8Xyb1EGKI",
+          "name": "Twix",
+          "seed": 2
+        }
+      ],
+      "rounds": [
+        {
+          "id": "AkpCUbD-HtdMNX18zslIJ",
+          "number": 1,
+          "label": "Final",
+          "startsAt": "2026-04-07T13:17:12.436Z",
+          "endsAt": "2026-04-07T14:17:12.436Z",
+          "status": "live",
+          "matchups": [
+            {
+              "id": "Oiyq0m5gSkyj20xMyIYkb",
+              "slot": 1,
+              "entrantAId": "OQCGMSv9YqjPE0FC3AkIU",
+              "entrantBId": "h2BAYI-Iwkoi8Xyb1EGKI",
+              "winnerEntrantId": null,
+              "status": "live",
+              "votes": [
+                {
+                  "id": "KdctR_jYjQolgEgzKxZN_",
+                  "browserTokenHash": "12bab1ab0bdb7cb13183d0c9e98db40f936b9f1f094a331011971fb68c982a9d",
+                  "entrantId": "OQCGMSv9YqjPE0FC3AkIU",
+                  "createdAt": "2026-04-07T13:17:12.436Z"
+                }
+              ],
+              "updatedAt": "2026-04-07T13:17:12.436Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
