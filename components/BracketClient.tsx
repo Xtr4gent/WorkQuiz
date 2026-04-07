@@ -4,16 +4,30 @@ import { useEffect, useEffectEvent, useMemo, useState, useSyncExternalStore } fr
 
 import { BracketSnapshot } from "@/lib/workquiz/types";
 
+const easternFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function formatEasternDateTime(value: string) {
+  return easternFormatter.format(new Date(value));
+}
+
 function roundStatusLabel(startsAt: string, endsAt: string, status: string) {
   if (status === "live") {
-    return `Live until ${new Date(endsAt).toLocaleString()}`;
+    return `Live until ${formatEasternDateTime(endsAt)}`;
   }
 
   if (status === "upcoming") {
-    return `Starts ${new Date(startsAt).toLocaleString()}`;
+    return `Starts ${formatEasternDateTime(startsAt)}`;
   }
 
-  return `Closed ${new Date(endsAt).toLocaleString()}`;
+  return `Closed ${formatEasternDateTime(endsAt)}`;
 }
 
 function formatCountdown(targetIso: string, nowTick: number) {
@@ -223,6 +237,10 @@ export function BracketClient({
       return;
     }
 
+    if (!window.confirm("Are you sure you want to advance to the next round early?")) {
+      return;
+    }
+
     const response = await fetch(`/api/admin/${adminToken}/advance`, { method: "POST" });
     const result = (await response.json()) as BracketSnapshot & { error?: string };
     if (!response.ok) {
@@ -231,6 +249,27 @@ export function BracketClient({
     }
 
     setSnapshot(result);
+  }
+
+  async function restartNow() {
+    if (!adminToken) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to restart the bracket from round one?")) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/admin/${adminToken}/restart`, { method: "POST" });
+    const result = (await response.json()) as BracketSnapshot & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "Could not restart the bracket.");
+      return;
+    }
+
+    setSnapshot(result);
+    setPendingVotes({});
   }
 
   return (
@@ -273,6 +312,7 @@ export function BracketClient({
           <span className="eyebrow">{mode === "admin" ? "Round Timing" : "Current Round"}</span>
           <h2>{currentRoundBanner.title}</h2>
           <p className="muted">{currentRoundBanner.body}</p>
+          {mode === "admin" ? <p className="muted">All times shown in Eastern Time.</p> : null}
         </div>
       </section>
 
@@ -280,9 +320,14 @@ export function BracketClient({
         <section className="panel stack-sm">
           <div className="inline-row">
             <h2>Admin links</h2>
-            <button className="secondary-button" onClick={advanceNow} type="button">
-              Force advance now
-            </button>
+            <div className="admin-actions">
+              <button className="secondary-button" onClick={advanceNow} type="button">
+                Force advance now
+              </button>
+              <button className="danger-button" onClick={restartNow} type="button">
+                Restart bracket
+              </button>
+            </div>
           </div>
           <div className="link-stack">
             <div>

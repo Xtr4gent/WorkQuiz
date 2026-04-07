@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { advanceBracket, buildSnapshot, castVote, createBracket } from "@/lib/workquiz/bracket";
+import {
+  advanceBracket,
+  buildSnapshot,
+  castVote,
+  createBracket,
+  restartBracket,
+} from "@/lib/workquiz/bracket";
 import { ensureStore, writeStore } from "@/lib/workquiz/store";
 
 function resetStore() {
@@ -161,4 +167,37 @@ test("buildSnapshot points at the next upcoming round before voting opens", () =
   assert.equal(snapshot.rounds[0].label, "Quarterfinals");
   assert.equal(snapshot.rounds[1].label, "Semifinals");
   assert.equal(snapshot.rounds[2].label, "Finals");
+});
+
+test("restartBracket clears votes and sends the bracket back to round one", () => {
+  resetStore();
+  const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { bracket } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    startsAt,
+    totalPlayers: 20,
+    roundDurationHours: 1,
+  });
+
+  const openingMatchup = bracket.rounds[0].matchups[0];
+
+  castVote({
+    publicToken: bracket.publicToken,
+    matchupId: openingMatchup.id,
+    entrantId: openingMatchup.entrantAId!,
+    browserToken: "browser-1",
+  });
+
+  advanceBracket(bracket, new Date(Date.now() + 2 * 60 * 60 * 1000));
+  restartBracket(bracket);
+
+  assert.equal(bracket.status, "live");
+  assert.equal(bracket.rounds.length, 2);
+  assert.equal(bracket.rounds[0].status, "live");
+  assert.equal(bracket.rounds[1].status, "upcoming");
+  assert.equal(bracket.rounds[0].matchups[0].votes.length, 0);
+  assert.equal(bracket.rounds[0].matchups[0].winnerEntrantId, null);
+  assert.equal(bracket.rounds[1].matchups[0].entrantAId, null);
 });

@@ -52,6 +52,62 @@ function labelForRound(roundNumber: number, totalRounds: number) {
   return `Round ${roundNumber}`;
 }
 
+function buildRoundsForBracket(bracket: BracketRecord, startsAt: string, roundDurationHours: number) {
+  const bracketSize = nextPowerOfTwo(bracket.entrants.length);
+  const totalRounds = Math.log2(bracketSize);
+  const roundSchedule = parseSchedule(startsAt, roundDurationHours, totalRounds);
+  const seedOrder = buildSeedOrder(bracketSize);
+  const seedToEntrant = new Map(bracket.entrants.map((entrant) => [entrant.seed, entrant]));
+
+  const rounds: RoundRecord[] = Array.from({ length: totalRounds }, (_, index) => ({
+    id: nanoid(),
+    number: index + 1,
+    label: labelForRound(index + 1, totalRounds),
+    startsAt: roundSchedule[index].startsAt,
+    endsAt: roundSchedule[index].endsAt,
+    status:
+      index === 0 && new Date(roundSchedule[index].startsAt).getTime() <= Date.now()
+        ? "live"
+        : "upcoming",
+    matchups: [],
+  }));
+
+  rounds[0].matchups = Array.from({ length: bracketSize / 2 }, (_, index) => {
+    const seedA = seedOrder[index * 2];
+    const seedB = seedOrder[index * 2 + 1];
+
+    return {
+      id: nanoid(),
+      slot: index + 1,
+      entrantAId: seedToEntrant.get(seedA)?.id ?? null,
+      entrantBId: seedToEntrant.get(seedB)?.id ?? null,
+      winnerEntrantId: null,
+      status: rounds[0].status === "live" ? "live" : "pending",
+      votes: [],
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  for (let roundIndex = 1; roundIndex < totalRounds; roundIndex += 1) {
+    rounds[roundIndex].matchups = Array.from(
+      { length: rounds[roundIndex - 1].matchups.length / 2 },
+      (_, index) => ({
+        id: nanoid(),
+        slot: index + 1,
+        entrantAId: null,
+        entrantBId: null,
+        winnerEntrantId: null,
+        status: "pending",
+        votes: [],
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  resolveAutomaticWinners({ ...bracket, rounds });
+  return rounds;
+}
+
 function deriveRoundDurationHours(input: CreateBracketInput) {
   if (input.endsAt) {
     const start = new Date(input.startsAt).getTime();
@@ -137,61 +193,6 @@ export function createBracket(input: CreateBracketInput) {
     seed: index + 1,
   }));
 
-  const bracketSize = nextPowerOfTwo(entrants.length);
-  const totalRounds = Math.log2(bracketSize);
-  const roundSchedule = parseSchedule(
-    input.startsAt,
-    roundDurationHours,
-    totalRounds,
-  );
-  const seedOrder = buildSeedOrder(bracketSize);
-  const seedToEntrant = new Map(entrants.map((entrant) => [entrant.seed, entrant]));
-
-  const rounds: RoundRecord[] = Array.from({ length: totalRounds }, (_, index) => ({
-    id: nanoid(),
-    number: index + 1,
-    label: labelForRound(index + 1, totalRounds),
-    startsAt: roundSchedule[index].startsAt,
-    endsAt: roundSchedule[index].endsAt,
-    status:
-      index === 0 && new Date(roundSchedule[index].startsAt).getTime() <= Date.now()
-        ? "live"
-        : "upcoming",
-    matchups: [],
-  }));
-
-  rounds[0].matchups = Array.from({ length: bracketSize / 2 }, (_, index) => {
-    const seedA = seedOrder[index * 2];
-    const seedB = seedOrder[index * 2 + 1];
-
-    return {
-      id: nanoid(),
-      slot: index + 1,
-      entrantAId: seedToEntrant.get(seedA)?.id ?? null,
-      entrantBId: seedToEntrant.get(seedB)?.id ?? null,
-      winnerEntrantId: null,
-      status: rounds[0].status === "live" ? "live" : "pending",
-      votes: [],
-      updatedAt: new Date().toISOString(),
-    };
-  });
-
-  for (let roundIndex = 1; roundIndex < totalRounds; roundIndex += 1) {
-    rounds[roundIndex].matchups = Array.from(
-      { length: rounds[roundIndex - 1].matchups.length / 2 },
-      (_, index) => ({
-        id: nanoid(),
-        slot: index + 1,
-        entrantAId: null,
-        entrantBId: null,
-        winnerEntrantId: null,
-        status: "pending",
-        votes: [],
-        updatedAt: new Date().toISOString(),
-      }),
-    );
-  }
-
   const adminToken = nanoid(32);
   const bracket: BracketRecord = {
     id: nanoid(),
@@ -207,10 +208,10 @@ export function createBracket(input: CreateBracketInput) {
     roundDurationHours,
     revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
     entrants,
-    rounds,
+    rounds: [],
   };
 
-  resolveAutomaticWinners(bracket);
+  bracket.rounds = buildRoundsForBracket(bracket, input.startsAt, roundDurationHours);
 
   updateStore((store) => ({
     ...store,
@@ -414,6 +415,12 @@ export function castVote(params: {
 
   publish(updated.publicToken, { type: "vote" });
   return updated;
+}
+
+export function restartBracket(bracket: BracketRecord) {
+  const baseStartsAt = bracket.rounds[0]?.startsAt ?? new Date().toISOString();
+  bracket.status = "live";
+  bracket.rounds = buildRoundsForBracket(bracket, baseStartsAt, bracket.roundDurationHours);
 }
 
 export function buildSnapshot(
