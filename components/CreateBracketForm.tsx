@@ -7,6 +7,11 @@ import { parseEntrantsFromText } from "@/lib/workquiz/utils";
 
 const roundDurationHours = 24 * 7;
 
+function toLocalDateTimeValue(date: Date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
 function move(items: string[], from: number, to: number) {
   const next = [...items];
   const [item] = next.splice(from, 1);
@@ -22,7 +27,7 @@ export function CreateBracketForm() {
   );
   const [seedingMode, setSeedingMode] = useState<"manual" | "random">("manual");
   const [startsAt, setStartsAt] = useState(() =>
-    new Date(Date.now() + 30 * 60 * 1000).toISOString().slice(0, 16),
+    toLocalDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)),
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
