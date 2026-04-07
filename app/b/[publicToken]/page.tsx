@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { BracketClient } from "@/components/BracketClient";
-import { getOrCreateBrowserToken } from "@/lib/workquiz/auth";
 import { buildSnapshot, findBracketByPublicToken } from "@/lib/workquiz/bracket";
 
 export default async function PublicBracketPage({
@@ -16,8 +15,7 @@ export default async function PublicBracketPage({
     notFound();
   }
 
-  const browserToken = await getOrCreateBrowserToken();
-  const snapshot = buildSnapshot(bracket, { browserToken });
+  const snapshot = buildSnapshot(bracket);
 
   return (
     <main className="shell bracket-shell">
