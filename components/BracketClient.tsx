@@ -30,6 +30,7 @@ export function BracketClient({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
+  const [hasMounted, setHasMounted] = useState(false);
   const [displayPublicUrl, setDisplayPublicUrl] = useState(initialSnapshot.publicUrl);
   const [displayAdminUrl, setDisplayAdminUrl] = useState(initialSnapshot.adminUrl ?? null);
 
@@ -86,6 +87,10 @@ export function BracketClient({
     () => snapshot.rounds.find((round) => round.id === snapshot.currentRoundId) ?? null,
     [snapshot],
   );
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     setDisplayPublicUrl(new URL(snapshot.publicUrl, window.location.origin).toString());
@@ -182,7 +187,11 @@ export function BracketClient({
                 <span className="eyebrow">{round.label}</span>
                 <h2>Round {round.number}</h2>
               </div>
-              <span className="muted">{roundStatusLabel(round.startsAt, round.endsAt, round.status)}</span>
+              <span className="muted" suppressHydrationWarning>
+                {hasMounted
+                  ? roundStatusLabel(round.startsAt, round.endsAt, round.status)
+                  : "Syncing round timing..."}
+              </span>
             </div>
 
             <div className="matchup-list">
