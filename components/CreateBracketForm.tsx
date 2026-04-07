@@ -29,6 +29,9 @@ export function CreateBracketForm() {
   const [startsAt, setStartsAt] = useState(() =>
     toLocalDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)),
   );
+  const [endsAt, setEndsAt] = useState(() =>
+    toLocalDateTimeValue(new Date(Date.now() + (30 + roundDurationHours * 60) * 60 * 1000)),
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -45,8 +48,13 @@ export function CreateBracketForm() {
       entrants,
       seedingMode,
       startsAt: new Date(String(formData.get("startsAt"))).toISOString(),
-      roundDurationHours,
+      endsAt: new Date(String(formData.get("endsAt"))).toISOString(),
     };
+
+    if (new Date(payload.endsAt).getTime() <= new Date(payload.startsAt).getTime()) {
+      setError("Round one end time must be later than the start time.");
+      return;
+    }
 
     startTransition(async () => {
       const response = await fetch("/api/brackets", {
@@ -88,6 +96,16 @@ export function CreateBracketForm() {
           name="startsAt"
           value={startsAt}
           onChange={(event) => setStartsAt(event.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span>Round one closes</span>
+        <input
+          type="datetime-local"
+          name="endsAt"
+          value={endsAt}
+          onChange={(event) => setEndsAt(event.target.value)}
         />
       </label>
 

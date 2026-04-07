@@ -62,7 +62,8 @@ export interface CreateBracketInput {
   seedingMode: SeedingMode;
   entrants: string[];
   startsAt: string;
-  roundDurationHours: number;
+  endsAt?: string;
+  roundDurationHours?: number;
   revoteDurationHours?: number;
 }
 

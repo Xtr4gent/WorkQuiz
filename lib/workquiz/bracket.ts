@@ -34,6 +34,22 @@ function parseSchedule(startsAt: string, roundDurationHours: number, count: numb
   });
 }
 
+function deriveRoundDurationHours(input: CreateBracketInput) {
+  if (input.endsAt) {
+    const start = new Date(input.startsAt).getTime();
+    const end = new Date(input.endsAt).getTime();
+    const durationHours = (end - start) / (1000 * 60 * 60);
+
+    if (!Number.isFinite(durationHours) || durationHours <= 0) {
+      throw new Error("Round one end time must be later than the start time.");
+    }
+
+    return durationHours;
+  }
+
+  return input.roundDurationHours || DEFAULT_ROUND_DURATION_HOURS;
+}
+
 function entrantMap(bracket: BracketRecord) {
   return new Map(bracket.entrants.map((entrant) => [entrant.id, entrant]));
 }
@@ -96,6 +112,7 @@ export function resolveAutomaticWinners(bracket: BracketRecord) {
 
 export function createBracket(input: CreateBracketInput) {
   const sourceEntrants = input.seedingMode === "random" ? shuffle(input.entrants) : input.entrants;
+  const roundDurationHours = deriveRoundDurationHours(input);
   const entrants = sourceEntrants.map<EntrantRecord>((name, index) => ({
     id: nanoid(),
     name,
@@ -106,7 +123,7 @@ export function createBracket(input: CreateBracketInput) {
   const totalRounds = Math.log2(bracketSize);
   const roundSchedule = parseSchedule(
     input.startsAt,
-    input.roundDurationHours || DEFAULT_ROUND_DURATION_HOURS,
+    roundDurationHours,
     totalRounds,
   );
   const seedOrder = buildSeedOrder(bracketSize);
@@ -168,7 +185,7 @@ export function createBracket(input: CreateBracketInput) {
     seedingMode: input.seedingMode,
     createdAt: new Date().toISOString(),
     publishedAt: new Date().toISOString(),
-    roundDurationHours: input.roundDurationHours || DEFAULT_ROUND_DURATION_HOURS,
+    roundDurationHours,
     revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
     entrants,
     rounds,

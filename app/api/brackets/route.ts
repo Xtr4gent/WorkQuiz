@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     entrantsText?: string;
     seedingMode?: "manual" | "random";
     startsAt?: string;
+    endsAt?: string;
     roundDurationHours?: number;
   };
 
@@ -29,11 +30,19 @@ export async function POST(request: Request) {
     );
   }
 
+  if (body.endsAt && new Date(body.endsAt).getTime() <= new Date(body.startsAt ?? "").getTime()) {
+    return NextResponse.json(
+      { error: "Round one end time must be later than the start time." },
+      { status: 400 },
+    );
+  }
+
   const { bracket, adminToken } = createBracket({
     title: body.title.trim(),
     entrants,
     seedingMode: body.seedingMode ?? "manual",
     startsAt: body.startsAt ?? new Date().toISOString(),
+    endsAt: body.endsAt,
     roundDurationHours: body.roundDurationHours ?? DEFAULT_ROUND_DURATION_HOURS,
   });
 

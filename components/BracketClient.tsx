@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState, useSyncExternalStore } from "react";
 
 import { BracketSnapshot } from "@/lib/workquiz/types";
 
@@ -14,6 +14,37 @@ function roundStatusLabel(startsAt: string, endsAt: string, status: string) {
   }
 
   return `Closed ${new Date(endsAt).toLocaleString()}`;
+}
+
+function formatCountdown(targetIso: string, nowTick: number) {
+  const msLeft = new Date(targetIso).getTime() - nowTick;
+  if (msLeft <= 0) {
+    return "less than a minute";
+  }
+
+  const totalSeconds = Math.floor(msLeft / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function useHydrated() {
+  return useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 }
 
 export function BracketClient({
@@ -30,9 +61,8 @@ export function BracketClient({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
-  const [hasMounted, setHasMounted] = useState(false);
-  const [displayPublicUrl, setDisplayPublicUrl] = useState(initialSnapshot.publicUrl);
-  const [displayAdminUrl, setDisplayAdminUrl] = useState(initialSnapshot.adminUrl ?? null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const hydrated = useHydrated();
 
   const refresh = useEffectEvent(async () => {
     const url = mode === "admin" ? `/api/admin/${adminToken}` : `/api/brackets/${token}`;
@@ -89,15 +119,79 @@ export function BracketClient({
   );
 
   useEffect(() => {
-    setHasMounted(true);
+    const timer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
-    setDisplayPublicUrl(new URL(snapshot.publicUrl, window.location.origin).toString());
-    setDisplayAdminUrl(
-      snapshot.adminUrl ? new URL(snapshot.adminUrl, window.location.origin).toString() : null,
-    );
-  }, [snapshot.adminUrl, snapshot.publicUrl]);
+    if (!currentRound) {
+      return;
+    }
+
+    const deadline =
+      currentRound.status === "live"
+        ? new Date(currentRound.endsAt).getTime()
+        : new Date(currentRound.startsAt).getTime();
+
+    if (deadline > nowTick) {
+      return;
+    }
+
+    void refresh();
+  }, [currentRound, nowTick]);
+
+  const displayPublicUrl = useMemo(() => {
+    if (!hydrated) {
+      return snapshot.publicUrl;
+    }
+
+    return new URL(snapshot.publicUrl, window.location.origin).toString();
+  }, [hydrated, snapshot.publicUrl]);
+
+  const displayAdminUrl = useMemo(() => {
+    if (!snapshot.adminUrl) {
+      return null;
+    }
+
+    if (!hydrated) {
+      return snapshot.adminUrl;
+    }
+
+    return new URL(snapshot.adminUrl, window.location.origin).toString();
+  }, [hydrated, snapshot.adminUrl]);
+
+  const currentRoundBanner = useMemo(() => {
+    if (!currentRound) {
+      return {
+        title: "Bracket complete",
+        body: "The final round is over. Time to celebrate the winner.",
+      };
+    }
+
+    if (currentRound.status === "live") {
+      return {
+        title: `Round ${currentRound.number} is live`,
+        body: `Voting closes in ${formatCountdown(currentRound.endsAt, nowTick)}.`,
+      };
+    }
+
+    if (currentRound.status === "upcoming") {
+      return {
+        title: `Round ${currentRound.number} has not opened yet`,
+        body: `Voting opens ${hydrated ? new Date(currentRound.startsAt).toLocaleString() : "soon"}.`,
+      };
+    }
+
+    return {
+      title: `Round ${currentRound.number} is closed`,
+      body: "Results are locked in while the bracket syncs the next stage.",
+    };
+  }, [currentRound, hydrated, nowTick]);
 
   async function vote(matchupId: string, entrantId: string) {
     setError(null);
@@ -154,6 +248,14 @@ export function BracketClient({
         </div>
       </section>
 
+      <section className="panel status-banner">
+        <div className="stack-sm">
+          <span className="eyebrow">{mode === "admin" ? "Round Timing" : "Current Round"}</span>
+          <h2>{currentRoundBanner.title}</h2>
+          <p className="muted">{currentRoundBanner.body}</p>
+        </div>
+      </section>
+
       {mode === "admin" ? (
         <section className="panel stack-sm">
           <div className="inline-row">
@@ -188,7 +290,7 @@ export function BracketClient({
                 <h2>Round {round.number}</h2>
               </div>
               <span className="muted" suppressHydrationWarning>
-                {hasMounted
+                {hydrated
                   ? roundStatusLabel(round.startsAt, round.endsAt, round.status)
                   : "Syncing round timing..."}
               </span>

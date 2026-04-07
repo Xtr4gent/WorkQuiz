@@ -11,17 +11,20 @@ function resetStore() {
 
 test("createBracket builds the bracket and returns an admin token", () => {
   resetStore();
+  const startsAt = new Date().toISOString();
+  const endsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const { bracket, adminToken } = createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
-    startsAt: new Date().toISOString(),
-    roundDurationHours: 1,
+    startsAt,
+    endsAt,
   });
 
   assert.equal(bracket.rounds.length, 2);
   assert.equal(bracket.rounds[0].matchups.length, 2);
   assert.ok(adminToken.length > 10);
+  assert.equal(new Date(bracket.rounds[0].endsAt).getTime(), new Date(endsAt).getTime());
 });
 
 test("castVote rejects duplicate votes from the same browser token", () => {
