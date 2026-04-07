@@ -58,6 +58,8 @@ export function parseEntrantsFromText(value: string) {
 }
 
 export function absoluteUrl(pathname: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
   return new URL(pathname, base).toString();
 }
