@@ -84,6 +84,24 @@ export function BracketClient({
     () => snapshot.rounds.find((round) => round.id === snapshot.currentRoundId) ?? null,
     [snapshot],
   );
+  const publicUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return snapshot.publicUrl;
+    }
+
+    return new URL(snapshot.publicUrl, window.location.origin).toString();
+  }, [snapshot.publicUrl]);
+  const adminUrl = useMemo(() => {
+    if (!snapshot.adminUrl) {
+      return null;
+    }
+
+    if (typeof window === "undefined") {
+      return snapshot.adminUrl;
+    }
+
+    return new URL(snapshot.adminUrl, window.location.origin).toString();
+  }, [snapshot.adminUrl]);
 
   async function vote(matchupId: string, entrantId: string) {
     setError(null);
@@ -151,12 +169,12 @@ export function BracketClient({
           <div className="link-stack">
             <div>
               <span className="muted">Public voting link</span>
-              <code>{snapshot.publicUrl}</code>
+              <code>{publicUrl}</code>
             </div>
-            {snapshot.adminUrl ? (
+            {adminUrl ? (
               <div>
                 <span className="muted">Secret admin link</span>
-                <code>{snapshot.adminUrl}</code>
+                <code>{adminUrl}</code>
               </div>
             ) : null}
           </div>

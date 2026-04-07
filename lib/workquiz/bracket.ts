@@ -15,7 +15,6 @@ import {
   RoundRecord,
 } from "@/lib/workquiz/types";
 import {
-  absoluteUrl,
   addHours,
   buildSeedOrder,
   hashValue,
@@ -433,10 +432,10 @@ export function buildSnapshot(
     slug: bracket.slug,
     status: bracket.status,
     publicToken: bracket.publicToken,
-    publicUrl: absoluteUrl(`/b/${bracket.publicToken}`),
+    publicUrl: `/b/${bracket.publicToken}`,
     adminUrl:
       options?.includeAdminUrl && options.adminToken
-        ? absoluteUrl(`/admin/${options.adminToken}`)
+        ? `/admin/${options.adminToken}`
         : undefined,
     seedingMode: bracket.seedingMode,
     createdAt: bracket.createdAt,
