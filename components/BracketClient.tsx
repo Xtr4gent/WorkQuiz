@@ -30,6 +30,8 @@ export function BracketClient({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
+  const [displayPublicUrl, setDisplayPublicUrl] = useState(initialSnapshot.publicUrl);
+  const [displayAdminUrl, setDisplayAdminUrl] = useState(initialSnapshot.adminUrl ?? null);
 
   const refresh = useEffectEvent(async () => {
     const url = mode === "admin" ? `/api/admin/${adminToken}` : `/api/brackets/${token}`;
@@ -84,24 +86,13 @@ export function BracketClient({
     () => snapshot.rounds.find((round) => round.id === snapshot.currentRoundId) ?? null,
     [snapshot],
   );
-  const publicUrl = useMemo(() => {
-    if (typeof window === "undefined") {
-      return snapshot.publicUrl;
-    }
 
-    return new URL(snapshot.publicUrl, window.location.origin).toString();
-  }, [snapshot.publicUrl]);
-  const adminUrl = useMemo(() => {
-    if (!snapshot.adminUrl) {
-      return null;
-    }
-
-    if (typeof window === "undefined") {
-      return snapshot.adminUrl;
-    }
-
-    return new URL(snapshot.adminUrl, window.location.origin).toString();
-  }, [snapshot.adminUrl]);
+  useEffect(() => {
+    setDisplayPublicUrl(new URL(snapshot.publicUrl, window.location.origin).toString());
+    setDisplayAdminUrl(
+      snapshot.adminUrl ? new URL(snapshot.adminUrl, window.location.origin).toString() : null,
+    );
+  }, [snapshot.adminUrl, snapshot.publicUrl]);
 
   async function vote(matchupId: string, entrantId: string) {
     setError(null);
@@ -169,12 +160,12 @@ export function BracketClient({
           <div className="link-stack">
             <div>
               <span className="muted">Public voting link</span>
-              <code>{publicUrl}</code>
+              <code>{displayPublicUrl}</code>
             </div>
-            {adminUrl ? (
+            {displayAdminUrl ? (
               <div>
                 <span className="muted">Secret admin link</span>
-                <code>{adminUrl}</code>
+                <code>{displayAdminUrl}</code>
               </div>
             ) : null}
           </div>
