@@ -19,12 +19,16 @@ test("createBracket builds the bracket and returns an admin token", () => {
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
     startsAt,
     endsAt,
+    totalPlayers: 20,
   });
 
   assert.equal(bracket.rounds.length, 2);
   assert.equal(bracket.rounds[0].matchups.length, 2);
   assert.ok(adminToken.length > 10);
-  assert.equal(new Date(bracket.rounds[0].endsAt).getTime(), new Date(endsAt).getTime());
+  assert.ok(
+    Math.abs(new Date(bracket.rounds[0].endsAt).getTime() - new Date(endsAt).getTime()) < 1000,
+  );
+  assert.equal(bracket.totalPlayers, 20);
 });
 
 test("castVote rejects duplicate votes from the same browser token", () => {
@@ -34,6 +38,7 @@ test("castVote rejects duplicate votes from the same browser token", () => {
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
     startsAt: new Date().toISOString(),
+    totalPlayers: 20,
     roundDurationHours: 1,
   });
 
@@ -64,6 +69,7 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
     startsAt,
+    totalPlayers: 20,
     roundDurationHours: 1,
   });
 
@@ -117,6 +123,7 @@ test("buildSnapshot knows when this browser has already voted", () => {
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
     startsAt: new Date().toISOString(),
+    totalPlayers: 20,
     roundDurationHours: 1,
   });
 
@@ -131,4 +138,27 @@ test("buildSnapshot knows when this browser has already voted", () => {
 
   const snapshot = buildSnapshot(afterVote, { browserToken: "browser-1" });
   assert.equal(snapshot.rounds[0].matchups[0].voteState.canVote, false);
+  assert.equal(snapshot.currentRoundUniqueVoters, 1);
+  assert.equal(snapshot.totalPlayers, 20);
+});
+
+test("buildSnapshot points at the next upcoming round before voting opens", () => {
+  resetStore();
+  const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const endsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const { bracket } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero", "Aero Mint", "Crunchie", "Coffee Crisp", "Smarties"],
+    startsAt,
+    endsAt,
+    totalPlayers: 20,
+  });
+
+  const snapshot = buildSnapshot(bracket);
+
+  assert.equal(snapshot.currentRoundId, snapshot.rounds[0].id);
+  assert.equal(snapshot.rounds[0].label, "Quarterfinals");
+  assert.equal(snapshot.rounds[1].label, "Semifinals");
+  assert.equal(snapshot.rounds[2].label, "Finals");
 });

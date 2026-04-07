@@ -22,6 +22,7 @@ function move(items: string[], from: number, to: number) {
 export function CreateBracketForm() {
   const router = useRouter();
   const [title, setTitle] = useState("Best Chocolate Bar");
+  const [totalPlayers, setTotalPlayers] = useState("20");
   const [entrantsText, setEntrantsText] = useState(
     "Mars\nKit Kat\nCoffee Crisp\nReese's\nTwix\nSnickers\nOh Henry!\nAero",
   );
@@ -49,10 +50,16 @@ export function CreateBracketForm() {
       seedingMode,
       startsAt: new Date(String(formData.get("startsAt"))).toISOString(),
       endsAt: new Date(String(formData.get("endsAt"))).toISOString(),
+      totalPlayers: Number(formData.get("totalPlayers")),
     };
 
     if (new Date(payload.endsAt).getTime() <= new Date(payload.startsAt).getTime()) {
       setError("Round one end time must be later than the start time.");
+      return;
+    }
+
+    if (!Number.isInteger(payload.totalPlayers) || payload.totalPlayers < 2) {
+      setError("Total players must be a whole number greater than 1.");
       return;
     }
 
@@ -106,6 +113,19 @@ export function CreateBracketForm() {
           name="endsAt"
           value={endsAt}
           onChange={(event) => setEndsAt(event.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span>Total players</span>
+        <input
+          inputMode="numeric"
+          min={2}
+          name="totalPlayers"
+          step={1}
+          type="number"
+          value={totalPlayers}
+          onChange={(event) => setTotalPlayers(event.target.value)}
         />
       </label>
 

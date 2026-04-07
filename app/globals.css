@@ -148,6 +148,24 @@ button {
   border-left: 8px solid var(--gold);
 }
 
+.public-summary {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.public-vote-stat {
+  min-width: min(100%, 320px);
+  padding: 1rem 1.25rem;
+}
+
+.public-vote-stat strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  text-transform: uppercase;
+}
+
 .metrics {
   display: grid;
   gap: 0.75rem;
@@ -319,6 +337,16 @@ button {
   border-color: rgba(229, 188, 90, 0.5);
 }
 
+.entrant-button.selected {
+  border-color: rgba(229, 188, 90, 0.92);
+  background: linear-gradient(135deg, rgba(229, 188, 90, 0.22), rgba(255, 255, 255, 0.1));
+}
+
+.vote-confirm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .matchup-meta {
   display: flex;
   justify-content: space-between;
@@ -357,6 +385,10 @@ button {
   .matchup-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .public-summary {
+    justify-content: stretch;
   }
 
   .seed-item {

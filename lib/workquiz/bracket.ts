@@ -34,6 +34,24 @@ function parseSchedule(startsAt: string, roundDurationHours: number, count: numb
   });
 }
 
+function labelForRound(roundNumber: number, totalRounds: number) {
+  const roundsRemaining = totalRounds - roundNumber + 1;
+
+  if (roundsRemaining === 1) {
+    return "Finals";
+  }
+
+  if (roundsRemaining === 2) {
+    return "Semifinals";
+  }
+
+  if (roundsRemaining === 3) {
+    return "Quarterfinals";
+  }
+
+  return `Round ${roundNumber}`;
+}
+
 function deriveRoundDurationHours(input: CreateBracketInput) {
   if (input.endsAt) {
     const start = new Date(input.startsAt).getTime();
@@ -132,7 +150,7 @@ export function createBracket(input: CreateBracketInput) {
   const rounds: RoundRecord[] = Array.from({ length: totalRounds }, (_, index) => ({
     id: nanoid(),
     number: index + 1,
-    label: index + 1 === totalRounds ? "Final" : `Round ${index + 1}`,
+    label: labelForRound(index + 1, totalRounds),
     startsAt: roundSchedule[index].startsAt,
     endsAt: roundSchedule[index].endsAt,
     status:
@@ -185,6 +203,7 @@ export function createBracket(input: CreateBracketInput) {
     seedingMode: input.seedingMode,
     createdAt: new Date().toISOString(),
     publishedAt: new Date().toISOString(),
+    totalPlayers: input.totalPlayers,
     roundDurationHours,
     revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
     entrants,
@@ -404,6 +423,10 @@ export function buildSnapshot(
   advanceBracket(bracket, new Date());
   const entrants = entrantMap(bracket);
   const browserTokenHash = options?.browserToken ? hashValue(options.browserToken) : null;
+  const currentRoundRecord =
+    bracket.rounds.find((round) => round.status === "live") ??
+    bracket.rounds.find((round) => round.status === "upcoming") ??
+    null;
 
   const rounds = bracket.rounds.map((round) => ({
     id: round.id,
@@ -442,6 +465,13 @@ export function buildSnapshot(
     (sum, round) => sum + round.matchups.reduce((roundSum, matchup) => roundSum + matchup.totalVotes, 0),
     0,
   );
+  const currentRoundUniqueVoters = currentRoundRecord
+    ? new Set(
+        currentRoundRecord.matchups.flatMap((matchup) =>
+          matchup.votes.map((vote) => vote.browserTokenHash),
+        ),
+      ).size
+    : 0;
 
   return {
     id: bracket.id,
@@ -457,10 +487,12 @@ export function buildSnapshot(
     seedingMode: bracket.seedingMode,
     createdAt: bracket.createdAt,
     publishedAt: bracket.publishedAt,
+    totalPlayers: bracket.totalPlayers ?? bracket.entrants.length,
     roundDurationHours: bracket.roundDurationHours,
     entrants: bracket.entrants,
     rounds,
-    currentRoundId: rounds.find((round) => round.status === "live")?.id ?? null,
+    currentRoundId: currentRoundRecord?.id ?? null,
+    currentRoundUniqueVoters,
     totalVotes,
   };
 }

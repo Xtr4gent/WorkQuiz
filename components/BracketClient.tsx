@@ -29,7 +29,7 @@ function formatCountdown(targetIso: string, nowTick: number) {
   const seconds = totalSeconds % 60;
 
   if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
   }
 
   if (hours > 0) {
@@ -62,6 +62,7 @@ export function BracketClient({
   const [error, setError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const [pendingVotes, setPendingVotes] = useState<Record<string, string>>({});
   const hydrated = useHydrated();
 
   const refresh = useEffectEvent(async () => {
@@ -74,6 +75,7 @@ export function BracketClient({
     }
 
     setSnapshot(result);
+    setPendingVotes({});
   });
 
   useEffect(() => {
@@ -175,20 +177,22 @@ export function BracketClient({
 
     if (currentRound.status === "live") {
       return {
-        title: `Round ${currentRound.number} is live`,
+        title: `${currentRound.label} is live`,
         body: `Voting closes in ${formatCountdown(currentRound.endsAt, nowTick)}.`,
       };
     }
 
     if (currentRound.status === "upcoming") {
       return {
-        title: `Round ${currentRound.number} has not opened yet`,
-        body: `Voting opens ${hydrated ? new Date(currentRound.startsAt).toLocaleString() : "soon"}.`,
+        title: `${currentRound.label} has not opened yet`,
+        body: hydrated
+          ? `Voting opens in ${formatCountdown(currentRound.startsAt, nowTick)}.`
+          : "Voting opens soon.",
       };
     }
 
     return {
-      title: `Round ${currentRound.number} is closed`,
+      title: `${currentRound.label} is closed`,
       body: "Results are locked in while the bracket syncs the next stage.",
     };
   }, [currentRound, hydrated, nowTick]);
@@ -207,6 +211,11 @@ export function BracketClient({
     }
 
     setSnapshot(result);
+    setPendingVotes((current) => {
+      const next = { ...current };
+      delete next[matchupId];
+      return next;
+    });
   }
 
   async function advanceNow() {
@@ -226,27 +235,38 @@ export function BracketClient({
 
   return (
     <div className="stack-lg">
-      <section className="panel board-header">
-        <div className="stack-sm">
-          <span className="eyebrow">{mode === "admin" ? "Admin Control" : "Live Bracket"}</span>
-          <h1>{snapshot.title}</h1>
-          <p className="muted">
-            {snapshot.status === "completed"
-              ? "The champion has been crowned."
-              : "Real-time bracket drama for the office chat."}
-          </p>
-        </div>
-        <div className="metrics">
-          <div>
-            <span>Total votes</span>
-            <strong>{snapshot.totalVotes}</strong>
+      {mode === "admin" ? (
+        <section className="panel board-header">
+          <div className="stack-sm">
+            <span className="eyebrow">Admin Control</span>
+            <h1>{snapshot.title}</h1>
+            <p className="muted">
+              {snapshot.status === "completed"
+                ? "The champion has been crowned."
+                : "Real-time bracket drama for the office chat."}
+            </p>
           </div>
-          <div>
-            <span>Connection</span>
-            <strong>{connectionState === "live" ? "WebSocket live" : "Polling backup"}</strong>
+          <div className="metrics">
+            <div>
+              <span>Total votes</span>
+              <strong>{snapshot.totalVotes}</strong>
+            </div>
+            <div>
+              <span>Connection</span>
+              <strong>{connectionState === "live" ? "WebSocket live" : "Polling backup"}</strong>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="public-summary">
+          <div className="panel public-vote-stat">
+            <span className="eyebrow">Participation</span>
+            <strong>
+              {snapshot.currentRoundUniqueVoters} / {snapshot.totalPlayers} voted
+            </strong>
+          </div>
+        </section>
+      )}
 
       <section className="panel status-banner">
         <div className="stack-sm">
@@ -286,8 +306,8 @@ export function BracketClient({
           <article className={`round-panel ${currentRound?.id === round.id ? "current" : ""}`} key={round.id}>
             <div className="round-title">
               <div>
-                <span className="eyebrow">{round.label}</span>
-                <h2>Round {round.number}</h2>
+                <span className="eyebrow">Stage {round.number}</span>
+                <h2>{round.label}</h2>
               </div>
               <span className="muted" suppressHydrationWarning>
                 {hydrated
@@ -300,12 +320,25 @@ export function BracketClient({
               {round.matchups.map((matchup) => {
                 const winnerA = matchup.winnerEntrantId && matchup.entrantA?.id === matchup.winnerEntrantId;
                 const winnerB = matchup.winnerEntrantId && matchup.entrantB?.id === matchup.winnerEntrantId;
+                const selectedEntrantId = pendingVotes[matchup.id] ?? matchup.voteState.votedEntrantId;
+                const canSubmitVote =
+                  matchup.voteState.canVote &&
+                  !!selectedEntrantId &&
+                  selectedEntrantId !== matchup.voteState.votedEntrantId;
                 return (
                   <div className="matchup-card" key={matchup.id}>
                     <button
-                      className={`entrant-button ${winnerA ? "winner" : ""}`}
+                      className={`entrant-button ${winnerA ? "winner" : ""} ${
+                        selectedEntrantId === matchup.entrantA?.id ? "selected" : ""
+                      }`}
                       disabled={!matchup.voteState.canVote || !matchup.entrantA}
-                      onClick={() => matchup.entrantA && vote(matchup.id, matchup.entrantA.id)}
+                      onClick={() =>
+                        matchup.entrantA &&
+                        setPendingVotes((current) => ({
+                          ...current,
+                          [matchup.id]: matchup.entrantA!.id,
+                        }))
+                      }
                       type="button"
                     >
                       <span>
@@ -314,9 +347,17 @@ export function BracketClient({
                       <strong>{matchup.votesA}</strong>
                     </button>
                     <button
-                      className={`entrant-button ${winnerB ? "winner" : ""}`}
+                      className={`entrant-button ${winnerB ? "winner" : ""} ${
+                        selectedEntrantId === matchup.entrantB?.id ? "selected" : ""
+                      }`}
                       disabled={!matchup.voteState.canVote || !matchup.entrantB}
-                      onClick={() => matchup.entrantB && vote(matchup.id, matchup.entrantB.id)}
+                      onClick={() =>
+                        matchup.entrantB &&
+                        setPendingVotes((current) => ({
+                          ...current,
+                          [matchup.id]: matchup.entrantB!.id,
+                        }))
+                      }
                       type="button"
                     >
                       <span>
@@ -324,6 +365,17 @@ export function BracketClient({
                       </span>
                       <strong>{matchup.votesB}</strong>
                     </button>
+
+                    {mode === "public" && matchup.voteState.canVote ? (
+                      <button
+                        className="inline-button vote-confirm-button"
+                        disabled={!canSubmitVote}
+                        onClick={() => selectedEntrantId && vote(matchup.id, selectedEntrantId)}
+                        type="button"
+                      >
+                        {selectedEntrantId ? "Vote for selected option" : "Select an option to vote"}
+                      </button>
+                    ) : null}
 
                     <div className="matchup-meta">
                       <span>{matchup.totalVotes} total votes</span>

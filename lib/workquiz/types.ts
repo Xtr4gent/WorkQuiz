@@ -47,6 +47,7 @@ export interface BracketRecord {
   seedingMode: SeedingMode;
   createdAt: string;
   publishedAt: string;
+  totalPlayers: number;
   roundDurationHours: number;
   revoteDurationHours: number;
   entrants: EntrantRecord[];
@@ -63,6 +64,7 @@ export interface CreateBracketInput {
   entrants: string[];
   startsAt: string;
   endsAt?: string;
+  totalPlayers: number;
   roundDurationHours?: number;
   revoteDurationHours?: number;
 }
@@ -112,9 +114,11 @@ export interface BracketSnapshot {
   seedingMode: SeedingMode;
   createdAt: string;
   publishedAt: string;
+  totalPlayers: number;
   roundDurationHours: number;
   entrants: BracketSnapshotEntrant[];
   rounds: BracketSnapshotRound[];
   currentRoundId: string | null;
+  currentRoundUniqueVoters: number;
   totalVotes: number;
 }

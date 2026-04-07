@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     seedingMode?: "manual" | "random";
     startsAt?: string;
     endsAt?: string;
+    totalPlayers?: number;
     roundDurationHours?: number;
   };
 
@@ -37,12 +38,22 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!Number.isInteger(body.totalPlayers) || (body.totalPlayers ?? 0) < 2) {
+    return NextResponse.json(
+      { error: "Total players must be a whole number greater than 1." },
+      { status: 400 },
+    );
+  }
+
+  const totalPlayers = Number(body.totalPlayers);
+
   const { bracket, adminToken } = createBracket({
     title: body.title.trim(),
     entrants,
     seedingMode: body.seedingMode ?? "manual",
     startsAt: body.startsAt ?? new Date().toISOString(),
     endsAt: body.endsAt,
+    totalPlayers,
     roundDurationHours: body.roundDurationHours ?? DEFAULT_ROUND_DURATION_HOURS,
   });
 
