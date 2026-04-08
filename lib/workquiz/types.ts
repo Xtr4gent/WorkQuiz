@@ -9,9 +9,14 @@ export interface EntrantRecord {
   seed: number;
 }
 
+export interface RosterMemberRecord {
+  id: string;
+  name: string;
+}
+
 export interface VoteRecord {
   id: string;
-  browserTokenHash: string;
+  rosterMemberId: string;
   entrantId: string;
   createdAt: string;
 }
@@ -51,6 +56,7 @@ export interface BracketRecord {
   roundDurationHours: number;
   revoteDurationHours: number;
   entrants: EntrantRecord[];
+  rosterMembers: RosterMemberRecord[];
   rounds: RoundRecord[];
 }
 
@@ -62,6 +68,7 @@ export interface CreateBracketInput {
   title: string;
   seedingMode: SeedingMode;
   entrants: string[];
+  rosterMembers: string[];
   seededEntrants?: string[];
   startsAt: string;
   endsAt?: string;
@@ -76,7 +83,7 @@ export interface AdminHistoryItem {
   winnerName: string;
   completedAt: string;
   entrantNames: string[];
-  totalPlayers: number;
+  rosterMemberNames: string[];
   seedingMode: SeedingMode;
 }
 
@@ -86,9 +93,20 @@ export interface BracketSnapshotEntrant {
   seed: number;
 }
 
+export interface BracketSnapshotRosterMember {
+  id: string;
+  name: string;
+}
+
 export interface BracketSnapshotVoteState {
   canVote: boolean;
   votedEntrantId: string | null;
+}
+
+export interface BracketSnapshotRosterStatus {
+  rosterMemberId: string;
+  name: string;
+  hasVoted: boolean;
 }
 
 export interface BracketSnapshotMatchup {
@@ -128,9 +146,12 @@ export interface BracketSnapshot {
   totalPlayers: number;
   roundDurationHours: number;
   entrants: BracketSnapshotEntrant[];
+  rosterMembers: BracketSnapshotRosterMember[];
   rounds: BracketSnapshotRound[];
   currentRoundId: string | null;
   currentRoundUniqueVoters: number;
   totalVotes: number;
+  selectedRosterMemberId?: string | null;
+  currentRoundRosterStatuses: BracketSnapshotRosterStatus[];
   adminHistory?: AdminHistoryItem[];
 }

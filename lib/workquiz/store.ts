@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { StoreShape } from "@/lib/workquiz/types";
+import { nanoid } from "nanoid";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const dataFile = path.join(dataDirectory, "workquiz.json");
@@ -24,7 +25,26 @@ export function ensureStore() {
 
 export function readStore(): StoreShape {
   ensureStore();
-  return JSON.parse(fs.readFileSync(dataFile, "utf8")) as StoreShape;
+  const parsed = JSON.parse(fs.readFileSync(dataFile, "utf8")) as StoreShape;
+  let changed = false;
+
+  for (const bracket of parsed.brackets as Array<
+    StoreShape["brackets"][number] & { rosterMembers?: Array<{ id: string; name: string }> }
+  >) {
+    if (!bracket.rosterMembers?.length) {
+      bracket.rosterMembers = Array.from({ length: bracket.totalPlayers ?? 0 }, (_, index) => ({
+        id: `legacy-roster-${index + 1}-${nanoid(6)}`,
+        name: `Player ${index + 1}`,
+      }));
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    writeStore(parsed);
+  }
+
+  return parsed;
 }
 
 export function writeStore(store: StoreShape) {

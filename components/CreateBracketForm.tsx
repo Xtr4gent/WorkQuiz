@@ -35,17 +35,20 @@ export function CreateBracketForm({
   initialTemplate?: {
     title: string;
     entrants: string[];
-    totalPlayers: number;
+    rosterMembers: string[];
     seedingMode: SeedingMode;
     sourceTitle?: string;
   } | null;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTemplate?.title ?? "Best Chocolate Bar");
-  const [totalPlayers, setTotalPlayers] = useState(String(initialTemplate?.totalPlayers ?? 20));
   const [entrantsText, setEntrantsText] = useState(
     initialTemplate?.entrants.join("\n") ??
       "Mars\nKit Kat\nCoffee Crisp\nReese's\nTwix\nSnickers\nOh Henry!\nAero",
+  );
+  const [rosterText, setRosterText] = useState(
+    initialTemplate?.rosterMembers.join("\n") ??
+      "Gabe\nAlex\nJordan\nSam\nPriya\nMaya\nLuca\nTaylor",
   );
   const [seedingMode, setSeedingMode] = useState<SeedingMode>(initialTemplate?.seedingMode ?? "manual");
   const [startsAt, setStartsAt] = useState(() =>
@@ -66,21 +69,21 @@ export function CreateBracketForm({
   const [isPending, startTransition] = useTransition();
 
   const entrants = useMemo(() => parseEntrantsFromText(entrantsText), [entrantsText]);
+  const rosterMembers = useMemo(() => parseEntrantsFromText(rosterText), [rosterText]);
   const previewIsValid = useMemo(() => {
     const startsAtIso = new Date(startsAt).toISOString();
     const endsAtIso = new Date(endsAt).toISOString();
-    const totalPlayersValue = Number(totalPlayers);
 
     return (
       !!title.trim() &&
       entrants.length >= 2 &&
+      rosterMembers.length >= 2 &&
       !Number.isNaN(new Date(startsAtIso).getTime()) &&
       !Number.isNaN(new Date(endsAtIso).getTime()) &&
       new Date(endsAtIso).getTime() > new Date(startsAtIso).getTime() &&
-      Number.isInteger(totalPlayersValue) &&
-      totalPlayersValue >= 2
+      new Set(rosterMembers.map((member) => member.toLowerCase())).size === rosterMembers.length
     );
-  }, [endsAt, entrants.length, startsAt, title, totalPlayers]);
+  }, [endsAt, entrants.length, rosterMembers, startsAt, title]);
 
   useEffect(() => {
     if (!previewIsValid) {
@@ -89,7 +92,6 @@ export function CreateBracketForm({
 
     const startsAtIso = new Date(startsAt).toISOString();
     const endsAtIso = new Date(endsAt).toISOString();
-    const totalPlayersValue = Number(totalPlayers);
 
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
@@ -100,11 +102,11 @@ export function CreateBracketForm({
         body: JSON.stringify({
           title,
           entrants,
+          rosterMembers,
           seededEntrants: previewSeededEntrants,
           seedingMode,
           startsAt: startsAtIso,
           endsAt: endsAtIso,
-          totalPlayers: totalPlayersValue,
         }),
         signal: controller.signal,
       }).catch(() => null);
@@ -131,7 +133,7 @@ export function CreateBracketForm({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [endsAt, entrants, previewIsValid, previewSeededEntrants, seedingMode, startsAt, title, totalPlayers]);
+  }, [endsAt, entrants, previewIsValid, previewSeededEntrants, rosterMembers, seedingMode, startsAt, title]);
 
   function updateEntrants(next: string[]) {
     setEntrantsText(next.join("\n"));
@@ -148,6 +150,10 @@ export function CreateBracketForm({
     setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(nextEntrants) : nextEntrants);
   }
 
+  function handleRosterTextChange(value: string) {
+    setRosterText(value);
+  }
+
   function handleSeedingModeChange(nextMode: SeedingMode) {
     setSeedingMode(nextMode);
     setPreviewSeededEntrants(nextMode === "random" ? shufflePreview(entrants) : entrants);
@@ -158,11 +164,11 @@ export function CreateBracketForm({
     const payload = {
       title: String(formData.get("title") ?? ""),
       entrants,
+      rosterMembers,
       seededEntrants: previewSeededEntrants,
       seedingMode,
       startsAt: new Date(String(formData.get("startsAt"))).toISOString(),
       endsAt: new Date(String(formData.get("endsAt"))).toISOString(),
-      totalPlayers: Number(formData.get("totalPlayers")),
     };
 
     if (new Date(payload.endsAt).getTime() <= new Date(payload.startsAt).getTime()) {
@@ -170,8 +176,13 @@ export function CreateBracketForm({
       return;
     }
 
-    if (!Number.isInteger(payload.totalPlayers) || payload.totalPlayers < 2) {
-      setError("Total players must be a whole number greater than 1.");
+    if (payload.rosterMembers.length < 2) {
+      setError("Add at least two roster members.");
+      return;
+    }
+
+    if (new Set(payload.rosterMembers.map((member) => member.toLowerCase())).size !== payload.rosterMembers.length) {
+      setError("Roster names must be unique.");
       return;
     }
 
@@ -232,24 +243,20 @@ export function CreateBracketForm({
       </label>
 
       <label className="field">
-        <span>Total players</span>
-        <input
-          inputMode="numeric"
-          min={2}
-          name="totalPlayers"
-          step={1}
-          type="number"
-          value={totalPlayers}
-          onChange={(event) => setTotalPlayers(event.target.value)}
-        />
-      </label>
-
-      <label className="field">
         <span>Entrants, one per line</span>
         <textarea
           rows={10}
           value={entrantsText}
           onChange={(event) => handleEntrantsTextChange(event.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span>Team roster, one person per line</span>
+        <textarea
+          rows={8}
+          value={rosterText}
+          onChange={(event) => handleRosterTextChange(event.target.value)}
         />
       </label>
 
@@ -326,7 +333,7 @@ export function CreateBracketForm({
             <div className="preview-summary">
               <strong>{previewSnapshot.title}</strong>
               <span className="muted">
-                {previewSnapshot.totalPlayers} players, {previewSnapshot.rounds.length} rounds
+                {previewSnapshot.rosterMembers.length} players, {previewSnapshot.rounds.length} rounds
               </span>
             </div>
             <div className="round-grid">
@@ -364,8 +371,8 @@ export function CreateBracketForm({
           </div>
         ) : (
           <p className="muted">
-            Add a title, at least two entrants, valid round timing, and total players to see the
-            full bracket preview.
+            Add a title, at least two entrants, a unique team roster, and valid round timing to
+            see the full bracket preview.
           </p>
         )}
       </section>

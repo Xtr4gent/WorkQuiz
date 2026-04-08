@@ -34,7 +34,9 @@ export default async function HomePage({
               ? {
                   title: templateBracket.title,
                   entrants: templateBracket.entrants.map((entrant) => entrant.name),
-                  totalPlayers: templateBracket.totalPlayers,
+                  rosterMembers:
+                    templateBracket.rosterMembers?.map((member) => member.name) ??
+                    Array.from({ length: templateBracket.totalPlayers }, (_, index) => `Player ${index + 1}`),
                   seedingMode: templateBracket.seedingMode,
                   sourceTitle: templateBracket.title,
                 }

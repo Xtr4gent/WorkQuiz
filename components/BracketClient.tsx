@@ -77,10 +77,17 @@ export function BracketClient({
   const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [pendingVotes, setPendingVotes] = useState<Record<string, string>>({});
+  const [selectedRosterMemberId, setSelectedRosterMemberId] = useState<string | null>(
+    initialSnapshot.selectedRosterMemberId ?? null,
+  );
   const hydrated = useHydrated();
 
   const refresh = useEffectEvent(async () => {
-    const url = mode === "admin" ? `/api/admin/${adminToken}` : `/api/brackets/${token}`;
+    const query =
+      mode === "public" && selectedRosterMemberId
+        ? `?rosterMemberId=${encodeURIComponent(selectedRosterMemberId)}`
+        : "";
+    const url = mode === "admin" ? `/api/admin/${adminToken}` : `/api/brackets/${token}${query}`;
     const response = await fetch(url, { cache: "no-store" });
     const result = (await response.json()) as BracketSnapshot & { error?: string };
     if (!response.ok) {
@@ -127,7 +134,13 @@ export function BracketClient({
       document.removeEventListener("visibilitychange", onVisible);
       ws.close();
     };
-  }, [adminToken, mode, token]);
+  }, [adminToken, mode, selectedRosterMemberId, token]);
+
+  useEffect(() => {
+    if (mode === "public") {
+      void refresh();
+    }
+  }, [mode, selectedRosterMemberId]);
 
   const currentRound = useMemo(
     () => snapshot.rounds.find((round) => round.id === snapshot.currentRoundId) ?? null,
@@ -221,10 +234,14 @@ export function BracketClient({
 
   async function vote(matchupId: string, entrantId: string) {
     setError(null);
+    if (!selectedRosterMemberId) {
+      setError("Choose your name before voting.");
+      return;
+    }
     const response = await fetch(`/api/brackets/${token}/votes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchupId, entrantId }),
+      body: JSON.stringify({ matchupId, entrantId, rosterMemberId: selectedRosterMemberId }),
     });
     const result = (await response.json()) as BracketSnapshot & { error?: string };
     if (!response.ok) {
@@ -238,6 +255,7 @@ export function BracketClient({
       delete next[matchupId];
       return next;
     });
+    setSelectedRosterMemberId(result.selectedRosterMemberId ?? selectedRosterMemberId);
   }
 
   async function advanceNow() {
@@ -305,12 +323,36 @@ export function BracketClient({
           </div>
         </section>
       ) : (
-        <section className="public-summary">
+        <section className="public-summary-grid">
           <div className="panel public-vote-stat">
             <span className="eyebrow">Participation</span>
             <strong>
               {snapshot.currentRoundUniqueVoters} / {snapshot.totalPlayers} voted
             </strong>
+          </div>
+          <div className="panel identity-panel stack-sm">
+            <span className="eyebrow">Who Are You?</span>
+            <label className="field">
+              <span className="sr-only">Select your name</span>
+              <select
+                className="identity-select"
+                value={selectedRosterMemberId ?? ""}
+                onChange={(event) => {
+                  setPendingVotes({});
+                  setSelectedRosterMemberId(event.target.value || null);
+                }}
+              >
+                <option value="">Choose your name</option>
+                {snapshot.rosterMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              Pick your name once, then vote across the current round without browser loopholes.
+            </p>
           </div>
         </section>
       )}
@@ -387,6 +429,27 @@ export function BracketClient({
 
       {error ? <p className="error-text">{error}</p> : null}
 
+      {mode === "public" ? (
+        <section className="panel stack-sm">
+          <div className="inline-row">
+            <h2>Voted?</h2>
+            <span className="muted">Green means done for this round. Red means still pending.</span>
+          </div>
+          <div className="roster-board">
+            {snapshot.currentRoundRosterStatuses.map((member) => (
+              <div
+                className={`roster-chip ${member.hasVoted ? "voted" : "pending"} ${
+                  member.rosterMemberId === selectedRosterMemberId ? "current-person" : ""
+                }`}
+                key={member.rosterMemberId}
+              >
+                <span>{member.name}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="round-grid">
         {snapshot.rounds.map((round) => (
           <article className={`round-panel ${currentRound?.id === round.id ? "current" : ""}`} key={round.id}>
@@ -461,6 +524,10 @@ export function BracketClient({
                       >
                         {selectedEntrantId ? "Vote for selected option" : "Select an option to vote"}
                       </button>
+                    ) : null}
+
+                    {mode === "public" && !selectedRosterMemberId ? (
+                      <p className="muted">Choose your name above to unlock voting.</p>
                     ) : null}
 
                     <div className="matchup-meta">

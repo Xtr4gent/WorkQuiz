@@ -10,9 +10,11 @@ import {
   AdminHistoryItem,
   BracketRecord,
   BracketSnapshot,
+  BracketSnapshotRosterStatus,
   CreateBracketInput,
   EntrantRecord,
   MatchupRecord,
+  RosterMemberRecord,
   RoundRecord,
 } from "@/lib/workquiz/types";
 import {
@@ -80,7 +82,7 @@ function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
         winnerName,
         completedAt: bracket.rounds.at(-1)?.endsAt ?? bracket.publishedAt,
         entrantNames: bracket.entrants.map((entrant) => entrant.name),
-        totalPlayers: bracket.totalPlayers,
+        rosterMemberNames: bracket.rosterMembers.map((member) => member.name),
         seedingMode: bracket.seedingMode,
       };
     })
@@ -233,6 +235,10 @@ export function createBracket(input: CreateBracketInput) {
     name,
     seed: index + 1,
   }));
+  const rosterMembers = input.rosterMembers.map<RosterMemberRecord>((name) => ({
+    id: nanoid(),
+    name,
+  }));
 
   const adminToken = nanoid(32);
   const bracket: BracketRecord = {
@@ -249,6 +255,7 @@ export function createBracket(input: CreateBracketInput) {
     roundDurationHours,
     revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
     entrants,
+    rosterMembers,
     rounds: [],
   };
 
@@ -408,10 +415,8 @@ export function castVote(params: {
   publicToken: string;
   matchupId: string;
   entrantId: string;
-  browserToken: string;
+  rosterMemberId: string;
 }) {
-  const browserTokenHash = hashValue(params.browserToken);
-
   updateStore((store) => {
     const bracket = store.brackets.find((entry) => entry.publicToken === params.publicToken);
     if (!bracket) {
@@ -433,14 +438,18 @@ export function castVote(params: {
       throw new Error("Invalid entrant.");
     }
 
-    const existingVote = matchup.votes.find((vote) => vote.browserTokenHash === browserTokenHash);
+    if (!bracket.rosterMembers.some((member) => member.id === params.rosterMemberId)) {
+      throw new Error("Select your name before voting.");
+    }
+
+    const existingVote = matchup.votes.find((vote) => vote.rosterMemberId === params.rosterMemberId);
     if (existingVote) {
-      throw new Error("This browser already voted in this matchup.");
+      throw new Error("This person already voted in this matchup.");
     }
 
     matchup.votes.push({
       id: nanoid(),
-      browserTokenHash,
+      rosterMemberId: params.rosterMemberId,
       entrantId: params.entrantId,
       createdAt: new Date().toISOString(),
     });
@@ -466,15 +475,31 @@ export function restartBracket(bracket: BracketRecord) {
 
 export function buildSnapshot(
   bracket: BracketRecord,
-  options?: { browserToken?: string; includeAdminUrl?: boolean; adminToken?: string },
+  options?: { rosterMemberId?: string; includeAdminUrl?: boolean; adminToken?: string },
 ): BracketSnapshot {
   advanceBracket(bracket, new Date());
   const entrants = entrantMap(bracket);
-  const browserTokenHash = options?.browserToken ? hashValue(options.browserToken) : null;
   const currentRoundRecord =
     bracket.rounds.find((round) => round.status === "live") ??
     bracket.rounds.find((round) => round.status === "upcoming") ??
     null;
+  const currentRoundVotingMatchups =
+    currentRoundRecord?.matchups.filter((matchup) => matchup.entrantAId && matchup.entrantBId) ?? [];
+  const currentRoundRosterStatuses: BracketSnapshotRosterStatus[] = currentRoundRecord
+    ? bracket.rosterMembers.map((member) => {
+        const hasVoted =
+          currentRoundVotingMatchups.length > 0 &&
+          currentRoundVotingMatchups.every((matchup) =>
+            matchup.votes.some((vote) => vote.rosterMemberId === member.id),
+          );
+
+        return {
+          rosterMemberId: member.id,
+          name: member.name,
+          hasVoted,
+        };
+      })
+    : [];
 
   const rounds = bracket.rounds.map((round) => ({
     id: round.id,
@@ -487,8 +512,8 @@ export function buildSnapshot(
       const counts = voteCounts(matchup);
       const votesA = matchup.entrantAId ? counts[matchup.entrantAId] ?? 0 : 0;
       const votesB = matchup.entrantBId ? counts[matchup.entrantBId] ?? 0 : 0;
-      const voted = browserTokenHash
-        ? matchup.votes.find((vote) => vote.browserTokenHash === browserTokenHash)
+      const voted = options?.rosterMemberId
+        ? matchup.votes.find((vote) => vote.rosterMemberId === options.rosterMemberId)
         : null;
 
       return {
@@ -513,13 +538,7 @@ export function buildSnapshot(
     (sum, round) => sum + round.matchups.reduce((roundSum, matchup) => roundSum + matchup.totalVotes, 0),
     0,
   );
-  const currentRoundUniqueVoters = currentRoundRecord
-    ? new Set(
-        currentRoundRecord.matchups.flatMap((matchup) =>
-          matchup.votes.map((vote) => vote.browserTokenHash),
-        ),
-      ).size
-    : 0;
+  const currentRoundUniqueVoters = currentRoundRosterStatuses.filter((member) => member.hasVoted).length;
 
   return {
     id: bracket.id,
@@ -538,10 +557,13 @@ export function buildSnapshot(
     totalPlayers: bracket.totalPlayers ?? bracket.entrants.length,
     roundDurationHours: bracket.roundDurationHours,
     entrants: bracket.entrants,
+    rosterMembers: bracket.rosterMembers,
     rounds,
     currentRoundId: currentRoundRecord?.id ?? null,
     currentRoundUniqueVoters,
     totalVotes,
+    selectedRosterMemberId: options?.rosterMemberId ?? null,
+    currentRoundRosterStatuses,
     adminHistory: options?.includeAdminUrl ? buildAdminHistory(bracket.id) : undefined,
   };
 }
@@ -570,6 +592,10 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
       id: `preview-entrant-${index + 1}`,
       name,
       seed: index + 1,
+    })),
+    rosterMembers: input.rosterMembers.map<RosterMemberRecord>((name, index) => ({
+      id: `preview-roster-${index + 1}`,
+      name,
     })),
     rounds: [],
   };

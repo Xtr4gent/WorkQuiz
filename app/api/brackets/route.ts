@@ -8,6 +8,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     title?: string;
     entrants?: string[];
+    rosterMembers?: string[];
     seededEntrants?: string[];
     entrantsText?: string;
     seedingMode?: "manual" | "random";
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   const entrants = body.entrants?.length
     ? body.entrants
     : parseEntrantsFromText(body.entrantsText ?? "");
+  const rosterMembers = body.rosterMembers?.length ? body.rosterMembers : [];
 
   if (!body.title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -32,6 +34,20 @@ export async function POST(request: Request) {
     );
   }
 
+  if (rosterMembers.length < 2) {
+    return NextResponse.json(
+      { error: "Add at least two roster members to create the bracket." },
+      { status: 400 },
+    );
+  }
+
+  if (new Set(rosterMembers.map((member) => member.toLowerCase())).size !== rosterMembers.length) {
+    return NextResponse.json(
+      { error: "Roster names must be unique." },
+      { status: 400 },
+    );
+  }
+
   if (body.endsAt && new Date(body.endsAt).getTime() <= new Date(body.startsAt ?? "").getTime()) {
     return NextResponse.json(
       { error: "Round one end time must be later than the start time." },
@@ -39,23 +55,15 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!Number.isInteger(body.totalPlayers) || (body.totalPlayers ?? 0) < 2) {
-    return NextResponse.json(
-      { error: "Total players must be a whole number greater than 1." },
-      { status: 400 },
-    );
-  }
-
-  const totalPlayers = Number(body.totalPlayers);
-
   const { bracket, adminToken } = createBracket({
     title: body.title.trim(),
     entrants,
+    rosterMembers,
     seededEntrants: body.seededEntrants,
     seedingMode: body.seedingMode ?? "manual",
     startsAt: body.startsAt ?? new Date().toISOString(),
     endsAt: body.endsAt,
-    totalPlayers,
+    totalPlayers: rosterMembers.length,
     roundDurationHours: body.roundDurationHours ?? DEFAULT_ROUND_DURATION_HOURS,
   });
 

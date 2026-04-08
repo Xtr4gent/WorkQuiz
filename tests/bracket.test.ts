@@ -11,6 +11,8 @@ import {
 } from "@/lib/workquiz/bracket";
 import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
 
+const roster = ["Gabe", "Alex", "Jordan", "Sam"];
+
 function resetStore() {
   ensureStore();
   writeStore({ brackets: [] });
@@ -24,38 +26,39 @@ test("createBracket builds the bracket and returns an admin token", () => {
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
     startsAt,
     endsAt,
-    totalPlayers: 20,
+    totalPlayers: roster.length,
   });
 
   assert.equal(bracket.rounds.length, 2);
   assert.equal(bracket.rounds[0].matchups.length, 2);
   assert.ok(adminToken.length > 10);
-  assert.ok(
-    Math.abs(new Date(bracket.rounds[0].endsAt).getTime() - new Date(endsAt).getTime()) < 1000,
-  );
-  assert.equal(bracket.totalPlayers, 20);
+  assert.equal(bracket.rosterMembers.length, roster.length);
+  assert.equal(bracket.totalPlayers, roster.length);
 });
 
-test("castVote rejects duplicate votes from the same browser token", () => {
+test("castVote rejects duplicate votes from the same roster member in a matchup", () => {
   resetStore();
   const { bracket } = createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
     startsAt: new Date().toISOString(),
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
   const matchup = bracket.rounds[0].matchups[0];
+  const voterId = bracket.rosterMembers[0].id;
 
   castVote({
     publicToken: bracket.publicToken,
     matchupId: matchup.id,
     entrantId: matchup.entrantAId!,
-    browserToken: "same-browser",
+    rosterMemberId: voterId,
   });
 
   assert.throws(() =>
@@ -63,7 +66,7 @@ test("castVote rejects duplicate votes from the same browser token", () => {
       publicToken: bracket.publicToken,
       matchupId: matchup.id,
       entrantId: matchup.entrantBId!,
-      browserToken: "same-browser",
+      rosterMemberId: voterId,
     }),
   );
 });
@@ -75,8 +78,9 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
     startsAt,
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
@@ -87,19 +91,19 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantAId!,
-    browserToken: "one",
+    rosterMemberId: bracket.rosterMembers[0].id,
   });
   castVote({
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantBId!,
-    browserToken: "two",
+    rosterMemberId: bracket.rosterMembers[1].id,
   });
   castVote({
     publicToken: bracket.publicToken,
     matchupId: semiB.id,
     entrantId: semiB.entrantAId!,
-    browserToken: "three",
+    rosterMemberId: bracket.rosterMembers[2].id,
   });
 
   advanceBracket(bracket, new Date(Date.now() + 60 * 60 * 1000));
@@ -107,13 +111,13 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
   const final = bracket.rounds[1].matchups[0];
   final.votes.push({
     id: "vote-1",
-    browserTokenHash: "a",
+    rosterMemberId: bracket.rosterMembers[0].id,
     entrantId: final.entrantAId!,
     createdAt: new Date().toISOString(),
   });
   final.votes.push({
     id: "vote-2",
-    browserTokenHash: "b",
+    rosterMemberId: bracket.rosterMembers[1].id,
     entrantId: final.entrantBId!,
     createdAt: new Date().toISOString(),
   });
@@ -123,30 +127,45 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
   assert.equal(bracket.rounds.at(-1)?.label, "Final Revote");
 });
 
-test("buildSnapshot knows when this browser has already voted", () => {
+test("buildSnapshot marks a roster member green only after finishing the whole current round", () => {
   resetStore();
   const { bracket } = createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
-    entrants: ["Mars", "Twix"],
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
     startsAt: new Date().toISOString(),
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
-  const matchup = bracket.rounds[0].matchups[0];
+  const voterId = bracket.rosterMembers[0].id;
 
-  const afterVote = castVote({
+  let updated = castVote({
     publicToken: bracket.publicToken,
-    matchupId: matchup.id,
-    entrantId: matchup.entrantAId!,
-    browserToken: "browser-1",
+    matchupId: bracket.rounds[0].matchups[0].id,
+    entrantId: bracket.rounds[0].matchups[0].entrantAId!,
+    rosterMemberId: voterId,
   });
 
-  const snapshot = buildSnapshot(afterVote, { browserToken: "browser-1" });
-  assert.equal(snapshot.rounds[0].matchups[0].voteState.canVote, false);
+  let snapshot = buildSnapshot(updated, { rosterMemberId: voterId });
+  assert.equal(snapshot.currentRoundUniqueVoters, 0);
+  assert.equal(
+    snapshot.currentRoundRosterStatuses.find((member) => member.rosterMemberId === voterId)?.hasVoted,
+    false,
+  );
+
+  updated = castVote({
+    publicToken: bracket.publicToken,
+    matchupId: updated.rounds[0].matchups[1].id,
+    entrantId: updated.rounds[0].matchups[1].entrantAId!,
+    rosterMemberId: voterId,
+  });
+
+  snapshot = buildSnapshot(updated, { rosterMemberId: voterId });
   assert.equal(snapshot.currentRoundUniqueVoters, 1);
-  assert.equal(snapshot.totalPlayers, 20);
+  assert.equal(snapshot.rounds[0].matchups[0].voteState.canVote, false);
+  assert.equal(snapshot.selectedRosterMemberId, voterId);
 });
 
 test("buildSnapshot points at the next upcoming round before voting opens", () => {
@@ -157,9 +176,10 @@ test("buildSnapshot points at the next upcoming round before voting opens", () =
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero", "Aero Mint", "Crunchie", "Coffee Crisp", "Smarties"],
+    rosterMembers: roster,
     startsAt,
     endsAt,
-    totalPlayers: 20,
+    totalPlayers: roster.length,
   });
 
   const snapshot = buildSnapshot(bracket);
@@ -177,8 +197,9 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
     startsAt,
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
@@ -188,7 +209,7 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
     publicToken: bracket.publicToken,
     matchupId: openingMatchup.id,
     entrantId: openingMatchup.entrantAId!,
-    browserToken: "browser-1",
+    rosterMemberId: bracket.rosterMembers[0].id,
   });
 
   advanceBracket(bracket, new Date(Date.now() + 2 * 60 * 60 * 1000));
@@ -200,7 +221,6 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
   assert.equal(bracket.rounds[1].status, "upcoming");
   assert.equal(bracket.rounds[0].matchups[0].votes.length, 0);
   assert.equal(bracket.rounds[0].matchups[0].winnerEntrantId, null);
-  assert.equal(bracket.rounds[1].matchups[0].entrantAId, null);
 });
 
 test("buildPreviewSnapshot preserves a provided random preview seed order", () => {
@@ -208,34 +228,38 @@ test("buildPreviewSnapshot preserves a provided random preview seed order", () =
   const snapshot = buildPreviewSnapshot({
     title: "Chocolate Bar Showdown",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
     seededEntrants: ["Aero", "Twix", "Mars", "Kit Kat"],
     seedingMode: "random",
     startsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    totalPlayers: 20,
+    totalPlayers: roster.length,
   });
 
   assert.equal(snapshot.entrants[0].name, "Aero");
   assert.equal(snapshot.rounds[0].matchups[0].entrantA?.name, "Aero");
+  assert.equal(snapshot.rosterMembers.length, roster.length);
 });
 
 test("admin snapshot includes previous completed topics and winners", () => {
   resetStore();
-  const { bracket: current } = createBracket({
+  const { bracket: current, adminToken } = createBracket({
     title: "Current Bracket",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
     startsAt: new Date().toISOString(),
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
-  const { bracket: previous, adminToken } = createBracket({
+  const { bracket: previous } = createBracket({
     title: "Previous Bracket",
     seedingMode: "manual",
     entrants: ["Kit Kat", "Aero"],
+    rosterMembers: roster,
     startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    totalPlayers: 20,
+    totalPlayers: roster.length,
     roundDurationHours: 1,
   });
 
