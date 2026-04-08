@@ -7,6 +7,7 @@ import { BracketSnapshot, SeedingMode } from "@/lib/workquiz/types";
 import { parseEntrantsFromText } from "@/lib/workquiz/utils";
 
 const roundDurationHours = 24 * 7;
+const LAST_ROSTER_STORAGE_KEY = "workquiz:last-admin-roster";
 
 function toLocalDateTimeValue(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
@@ -67,6 +68,7 @@ export function CreateBracketForm({
   const [previewSnapshot, setPreviewSnapshot] = useState<BracketSnapshot | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isRosterStorageReady, setIsRosterStorageReady] = useState(Boolean(initialTemplate?.rosterMembers.length));
 
   const entrants = useMemo(() => parseEntrantsFromText(entrantsText), [entrantsText]);
   const rosterMembers = useMemo(() => parseEntrantsFromText(rosterText), [rosterText]);
@@ -134,6 +136,32 @@ export function CreateBracketForm({
       window.clearTimeout(timeout);
     };
   }, [endsAt, entrants, previewIsValid, previewSeededEntrants, rosterMembers, seedingMode, startsAt, title]);
+
+  useEffect(() => {
+    if (initialTemplate?.rosterMembers.length) {
+      return;
+    }
+
+    const rememberedRoster = window.localStorage.getItem(LAST_ROSTER_STORAGE_KEY);
+    const timeout = window.setTimeout(() => {
+      if (rememberedRoster?.trim()) {
+        setRosterText(rememberedRoster);
+      }
+      setIsRosterStorageReady(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [initialTemplate]);
+
+  useEffect(() => {
+    if (!isRosterStorageReady) {
+      return;
+    }
+
+    window.localStorage.setItem(LAST_ROSTER_STORAGE_KEY, rosterText);
+  }, [isRosterStorageReady, rosterText]);
 
   function updateEntrants(next: string[]) {
     setEntrantsText(next.join("\n"));
@@ -258,6 +286,7 @@ export function CreateBracketForm({
           value={rosterText}
           onChange={(event) => handleRosterTextChange(event.target.value)}
         />
+        <span className="muted">We&apos;ll remember this roster on this browser for next time.</span>
       </label>
 
       <div className="seed-mode">
