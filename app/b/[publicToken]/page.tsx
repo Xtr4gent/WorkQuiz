@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BracketClient } from "@/components/BracketClient";
+import { getRememberedRosterMemberId } from "@/lib/workquiz/auth";
 import { buildSnapshot, findBracketByPublicToken } from "@/lib/workquiz/bracket";
 
 export default async function PublicBracketPage({
@@ -15,7 +16,11 @@ export default async function PublicBracketPage({
     notFound();
   }
 
-  const snapshot = buildSnapshot(bracket);
+  const rememberedRosterMemberId = await getRememberedRosterMemberId();
+  const rosterMemberId = bracket.rosterMembers.some((member) => member.id === rememberedRosterMemberId)
+    ? rememberedRosterMemberId ?? undefined
+    : undefined;
+  const snapshot = buildSnapshot(bracket, { rosterMemberId });
 
   return (
     <main className="shell bracket-shell">

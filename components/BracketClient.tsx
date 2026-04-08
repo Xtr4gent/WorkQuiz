@@ -84,8 +84,8 @@ export function BracketClient({
 
   const refresh = useEffectEvent(async () => {
     const query =
-      mode === "public" && selectedRosterMemberId
-        ? `?rosterMemberId=${encodeURIComponent(selectedRosterMemberId)}`
+      mode === "public"
+        ? `?rosterMemberId=${encodeURIComponent(selectedRosterMemberId ?? "")}`
         : "";
     const url = mode === "admin" ? `/api/admin/${adminToken}` : `/api/brackets/${token}${query}`;
     const response = await fetch(url, { cache: "no-store" });
@@ -338,9 +338,17 @@ export function BracketClient({
                 className="identity-select"
                 value={selectedRosterMemberId ?? ""}
                 onChange={(event) => {
+                  const nextRosterMemberId = event.target.value || null;
                   setError(null);
                   setPendingVotes({});
-                  setSelectedRosterMemberId(event.target.value || null);
+                  setSelectedRosterMemberId(nextRosterMemberId);
+                  if (mode === "public") {
+                    void fetch(`/api/brackets/${token}/identity`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ rosterMemberId: nextRosterMemberId }),
+                    });
+                  }
                 }}
               >
                 <option value="">Choose your name</option>
