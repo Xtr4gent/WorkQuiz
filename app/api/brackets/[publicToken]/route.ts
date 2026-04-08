@@ -14,6 +14,10 @@ export async function GET(
     return NextResponse.json({ error: "Bracket not found." }, { status: 404 });
   }
 
+  if (bracket.status === "disabled") {
+    return NextResponse.json({ error: "Bracket not available." }, { status: 404 });
+  }
+
   const searchParams = new URL(request.url).searchParams;
   const requestedRosterMemberId = searchParams.get("rosterMemberId");
   const rememberedRosterMemberId = searchParams.has("rosterMemberId")

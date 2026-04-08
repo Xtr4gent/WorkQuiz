@@ -203,6 +203,13 @@ export function BracketClient({
   }, [adminToken]);
 
   const currentRoundBanner = useMemo(() => {
+    if (snapshot.status === "disabled") {
+      return {
+        title: "Bracket shut down",
+        body: "The public link has been disabled and voting is no longer available.",
+      };
+    }
+
     if (!currentRound) {
       return {
         title: "Bracket complete",
@@ -230,12 +237,17 @@ export function BracketClient({
       title: `${currentRound.label} is closed`,
       body: "Results are locked in while the bracket syncs the next stage.",
     };
-  }, [currentRound, hydrated, nowTick]);
+  }, [currentRound, hydrated, nowTick, snapshot.status]);
 
   const selectedRosterMemberName = useMemo(
     () =>
       snapshot.rosterMembers.find((member) => member.id === selectedRosterMemberId)?.name ?? null,
     [selectedRosterMemberId, snapshot.rosterMembers],
+  );
+
+  const createNewBracketHref = useMemo(
+    () => (adminToken ? `/?adminToken=${encodeURIComponent(adminToken)}` : "/"),
+    [adminToken],
   );
 
   function handleRosterSelection(nextRosterMemberId: string | null) {
@@ -316,6 +328,51 @@ export function BracketClient({
 
     setSnapshot(result);
     setPendingVotes({});
+  }
+
+  async function shutDownNow() {
+    if (!adminToken) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to shut down this bracket and disable the public link?")) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/admin/${adminToken}/shutdown`, { method: "POST" });
+    const result = (await response.json()) as BracketSnapshot & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "Could not shut down the bracket.");
+      return;
+    }
+
+    setSnapshot(result);
+    setPendingVotes({});
+  }
+
+  async function clearVote(matchupId: string, rosterMemberId: string, rosterMemberName: string) {
+    if (!adminToken) {
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to clear ${rosterMemberName}'s vote for this matchup?`)) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/admin/${adminToken}/votes/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchupId, rosterMemberId }),
+    });
+    const result = (await response.json()) as BracketSnapshot & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "Could not clear the vote.");
+      return;
+    }
+
+    setSnapshot(result);
   }
 
   return (
@@ -415,18 +472,25 @@ export function BracketClient({
           <div className="inline-row">
             <h2>Admin links</h2>
             <div className="admin-actions">
-              <button className="secondary-button" onClick={advanceNow} type="button">
-                Force advance now
-              </button>
-              <button className="danger-button" onClick={restartNow} type="button">
-                Restart bracket
-              </button>
+              {snapshot.status !== "disabled" ? (
+                <>
+                  <button className="secondary-button" onClick={advanceNow} type="button">
+                    Force advance now
+                  </button>
+                  <button className="danger-button" onClick={restartNow} type="button">
+                    Restart bracket
+                  </button>
+                  <button className="danger-button" onClick={shutDownNow} type="button">
+                    Shut down bracket
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="link-stack">
             <div>
               <span className="muted">Public voting link</span>
-              <code>{displayPublicUrl}</code>
+              <code>{snapshot.status === "disabled" ? "Disabled" : displayPublicUrl}</code>
             </div>
             {displayAdminUrl ? (
               <div>
@@ -434,6 +498,20 @@ export function BracketClient({
                 <code>{displayAdminUrl}</code>
               </div>
             ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {mode === "admin" && snapshot.status !== "live" ? (
+        <section className="panel stack-sm">
+          <div className="inline-row">
+            <div className="stack-sm">
+              <span className="eyebrow">Next Bracket</span>
+              <h2>Create the next office showdown.</h2>
+            </div>
+            <a className="primary-button" href={createNewBracketHref}>
+              Create a new bracket
+            </a>
           </div>
         </section>
       ) : null}
@@ -579,6 +657,27 @@ export function BracketClient({
                       <span>{matchup.totalVotes} total votes</span>
                       {matchup.voteState.votedEntrantId ? <span>Your vote is locked in</span> : null}
                     </div>
+
+                    {mode === "admin" && matchup.adminVotes?.length ? (
+                      <div className="admin-vote-list">
+                        {matchup.adminVotes.map((vote) => (
+                          <div className="admin-vote-item" key={`${matchup.id}-${vote.rosterMemberId}`}>
+                            <span>
+                              {vote.rosterMemberName} voted for {vote.entrantName}
+                            </span>
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                clearVote(matchup.id, vote.rosterMemberId, vote.rosterMemberName)
+                              }
+                              type="button"
+                            >
+                              Clear vote
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}

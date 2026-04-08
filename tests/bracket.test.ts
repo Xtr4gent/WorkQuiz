@@ -6,7 +6,9 @@ import {
   buildPreviewSnapshot,
   buildSnapshot,
   castVote,
+  clearMatchupVote,
   createBracket,
+  disableBracket,
   restartBracket,
 } from "@/lib/workquiz/bracket";
 import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
@@ -221,6 +223,69 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
   assert.equal(bracket.rounds[1].status, "upcoming");
   assert.equal(bracket.rounds[0].matchups[0].votes.length, 0);
   assert.equal(bracket.rounds[0].matchups[0].winnerEntrantId, null);
+});
+
+test("disableBracket makes the bracket unavailable for public use", () => {
+  resetStore();
+  const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { bracket } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt,
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  disableBracket(bracket);
+  writeStore({ brackets: [bracket] });
+  const snapshot = buildSnapshot(bracket);
+
+  assert.equal(snapshot.status, "disabled");
+  assert.equal(snapshot.rounds[0].status, "closed");
+  assert.equal(snapshot.rounds[0].matchups[0].status, "closed");
+  assert.throws(() =>
+    castVote({
+      publicToken: bracket.publicToken,
+      matchupId: bracket.rounds[0].matchups[0].id,
+      entrantId: bracket.rounds[0].matchups[0].entrantAId!,
+      rosterMemberId: bracket.rosterMembers[0].id,
+    }),
+  );
+});
+
+test("clearMatchupVote removes one person's vote from a specific matchup", () => {
+  resetStore();
+  const { bracket, adminToken } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const matchup = bracket.rounds[0].matchups[0];
+  const voterId = bracket.rosterMembers[0].id;
+
+  castVote({
+    publicToken: bracket.publicToken,
+    matchupId: matchup.id,
+    entrantId: matchup.entrantAId!,
+    rosterMemberId: voterId,
+  });
+
+  const updated = clearMatchupVote({
+    adminToken,
+    matchupId: matchup.id,
+    rosterMemberId: voterId,
+  });
+  const snapshot = buildSnapshot(updated, { includeAdminUrl: true, adminToken });
+
+  assert.equal(snapshot.rounds[0].matchups[0].totalVotes, 0);
+  assert.equal(snapshot.rounds[0].matchups[0].adminVotes?.length, 0);
 });
 
 test("buildPreviewSnapshot preserves a provided random preview seed order", () => {

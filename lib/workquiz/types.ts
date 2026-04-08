@@ -1,5 +1,5 @@
 export type SeedingMode = "manual" | "random";
-export type BracketStatus = "draft" | "live" | "completed";
+export type BracketStatus = "draft" | "live" | "completed" | "disabled";
 export type RoundStatus = "upcoming" | "live" | "closed";
 export type MatchupStatus = "pending" | "live" | "closed";
 
@@ -103,6 +103,14 @@ export interface BracketSnapshotVoteState {
   votedEntrantId: string | null;
 }
 
+export interface AdminVoteEntry {
+  rosterMemberId: string;
+  rosterMemberName: string;
+  entrantId: string;
+  entrantName: string;
+  createdAt: string;
+}
+
 export interface BracketSnapshotRosterStatus {
   rosterMemberId: string;
   name: string;
@@ -120,6 +128,7 @@ export interface BracketSnapshotMatchup {
   votesB: number;
   totalVotes: number;
   voteState: BracketSnapshotVoteState;
+  adminVotes?: AdminVoteEntry[];
 }
 
 export interface BracketSnapshotRound {

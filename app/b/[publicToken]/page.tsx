@@ -12,7 +12,7 @@ export default async function PublicBracketPage({
   const { publicToken } = await params;
   const bracket = findBracketByPublicToken(publicToken);
 
-  if (!bracket) {
+  if (!bracket || bracket.status === "disabled") {
     notFound();
   }
 

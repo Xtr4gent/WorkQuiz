@@ -248,7 +248,8 @@ button {
 .matchup-list,
 .round-grid,
 .link-stack,
-.history-list {
+.history-list,
+.admin-vote-list {
   display: grid;
   gap: 1rem;
 }
@@ -361,6 +362,16 @@ button {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.66);
   padding: 0.9rem 1rem;
+}
+
+.admin-vote-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  padding: 0.8rem 0.9rem;
 }
 
 .seed-item {
@@ -518,7 +529,8 @@ button {
   .inline-row,
   .matchup-meta,
   .preview-summary,
-  .history-item {
+  .history-item,
+  .admin-vote-item {
     flex-direction: column;
     align-items: flex-start;
   }

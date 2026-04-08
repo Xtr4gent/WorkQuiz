@@ -7,6 +7,7 @@ import {
 import { publish } from "@/lib/workquiz/realtime";
 import { readStore, updateStore, writeStore } from "@/lib/workquiz/store";
 import {
+  AdminVoteEntry,
   AdminHistoryItem,
   BracketRecord,
   BracketSnapshot,
@@ -69,7 +70,11 @@ function winnerNameForBracket(bracket: BracketRecord) {
 function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
   return readStore()
     .brackets
-    .filter((bracket) => bracket.id !== activeBracketId && bracket.status === "completed")
+    .filter(
+      (bracket) =>
+        bracket.id !== activeBracketId &&
+        (bracket.status === "completed" || bracket.status === "disabled"),
+    )
     .map((bracket) => {
       const winnerName = winnerNameForBracket(bracket);
       if (!winnerName) {
@@ -293,6 +298,10 @@ function winnerFromSeed(bracket: BracketRecord, matchup: MatchupRecord) {
 }
 
 export function advanceBracket(bracket: BracketRecord, now = new Date()) {
+  if (bracket.status === "disabled") {
+    return;
+  }
+
   for (let roundIndex = 0; roundIndex < bracket.rounds.length; roundIndex += 1) {
     const round = bracket.rounds[roundIndex];
 
@@ -387,6 +396,10 @@ export function advanceReadyBrackets(now = new Date()) {
   let changed = false;
 
   for (const bracket of store.brackets) {
+    if (bracket.status === "disabled") {
+      continue;
+    }
+
     const before = JSON.stringify(bracket);
     advanceBracket(bracket, now);
     if (before !== JSON.stringify(bracket)) {
@@ -421,6 +434,10 @@ export function castVote(params: {
     const bracket = store.brackets.find((entry) => entry.publicToken === params.publicToken);
     if (!bracket) {
       throw new Error("Bracket not found.");
+    }
+
+    if (bracket.status === "disabled") {
+      throw new Error("This bracket is no longer available.");
     }
 
     advanceBracket(bracket, new Date());
@@ -473,12 +490,74 @@ export function restartBracket(bracket: BracketRecord) {
   bracket.rounds = buildRoundsForBracket(bracket, baseStartsAt, bracket.roundDurationHours);
 }
 
+export function disableBracket(bracket: BracketRecord) {
+  bracket.status = "disabled";
+  for (const round of bracket.rounds) {
+    if (round.status === "live" || round.status === "upcoming") {
+      round.status = "closed";
+    }
+
+    for (const matchup of round.matchups) {
+      if (matchup.status === "live" || matchup.status === "pending") {
+        matchup.status = "closed";
+      }
+    }
+  }
+}
+
+export function clearMatchupVote(params: {
+  adminToken: string;
+  matchupId: string;
+  rosterMemberId: string;
+}) {
+  updateStore((store) => {
+    const bracket = store.brackets.find((entry) => entry.adminTokenHash === hashValue(params.adminToken));
+    if (!bracket) {
+      throw new Error("Bracket not found.");
+    }
+
+    let targetMatchup: MatchupRecord | null = null;
+    for (const round of bracket.rounds) {
+      const matchup = round.matchups.find((entry) => entry.id === params.matchupId);
+      if (matchup) {
+        targetMatchup = matchup;
+        break;
+      }
+    }
+
+    if (!targetMatchup) {
+      throw new Error("Matchup not found.");
+    }
+
+    const nextVotes = targetMatchup.votes.filter((vote) => vote.rosterMemberId !== params.rosterMemberId);
+    if (nextVotes.length === targetMatchup.votes.length) {
+      throw new Error("Vote not found for that person in this matchup.");
+    }
+
+    targetMatchup.votes = nextVotes;
+    targetMatchup.updatedAt = new Date().toISOString();
+
+    return store;
+  });
+
+  const updated = findBracketByAdminToken(params.adminToken);
+  if (!updated) {
+    throw new Error("Bracket not found.");
+  }
+
+  publish(updated.publicToken, { type: "vote-reset" });
+  return updated;
+}
+
 export function buildSnapshot(
   bracket: BracketRecord,
   options?: { rosterMemberId?: string; includeAdminUrl?: boolean; adminToken?: string },
 ): BracketSnapshot {
-  advanceBracket(bracket, new Date());
+  if (bracket.status !== "disabled") {
+    advanceBracket(bracket, new Date());
+  }
   const entrants = entrantMap(bracket);
+  const rosterMap = new Map(bracket.rosterMembers.map((member) => [member.id, member]));
   const currentRoundRecord =
     bracket.rounds.find((round) => round.status === "live") ??
     bracket.rounds.find((round) => round.status === "upcoming") ??
@@ -530,6 +609,15 @@ export function buildSnapshot(
           canVote: round.status === "live" && matchup.status === "live" && !voted,
           votedEntrantId: voted?.entrantId ?? null,
         },
+        adminVotes: options?.includeAdminUrl
+          ? matchup.votes.map<AdminVoteEntry>((vote) => ({
+              rosterMemberId: vote.rosterMemberId,
+              rosterMemberName: rosterMap.get(vote.rosterMemberId)?.name ?? "Unknown voter",
+              entrantId: vote.entrantId,
+              entrantName: entrants.get(vote.entrantId)?.name ?? "Unknown entrant",
+              createdAt: vote.createdAt,
+            }))
+          : undefined,
       };
     }),
   }));
