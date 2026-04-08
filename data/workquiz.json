@@ -1,3 +1,136 @@
 {
-  "brackets": []
+  "brackets": [
+    {
+      "id": "8AqcJErtAL-ydCl1QWj0g",
+      "title": "Current Bracket",
+      "slug": "current-bracket",
+      "status": "live",
+      "publicToken": "lJu04npvSb8As-gT",
+      "adminTokenHash": "6d0343623c8068b2b70327b991ccae0f1de2d983ed7cf76767c01e9e7d5d1ad2",
+      "seedingMode": "manual",
+      "createdAt": "2026-04-08T19:35:33.693Z",
+      "publishedAt": "2026-04-08T19:35:33.693Z",
+      "totalPlayers": 4,
+      "roundDurationHours": 1,
+      "revoteDurationHours": 24,
+      "entrants": [
+        {
+          "id": "D-Ees4ArqHuCxkmou0_Fx",
+          "name": "Mars",
+          "seed": 1
+        },
+        {
+          "id": "ut1ETjGFXChKiKza4o3t9",
+          "name": "Twix",
+          "seed": 2
+        }
+      ],
+      "rosterMembers": [
+        {
+          "id": "bZzyyBD9XMCgxcVexkQs7",
+          "name": "Gabe"
+        },
+        {
+          "id": "3xZCIP4VcYlpe0yRgdUm3",
+          "name": "Alex"
+        },
+        {
+          "id": "sRHMANKZmrMiNlJMhF9FF",
+          "name": "Jordan"
+        },
+        {
+          "id": "dyQ-OgmemaLee-Df0qixx",
+          "name": "Sam"
+        }
+      ],
+      "rounds": [
+        {
+          "id": "meesd8HKBUTWu2Qcmaq4Y",
+          "number": 1,
+          "label": "Finals",
+          "startsAt": "2026-04-08T19:35:33.693Z",
+          "endsAt": "2026-04-08T20:35:33.693Z",
+          "status": "live",
+          "matchups": [
+            {
+              "id": "PKRTVnhsg0kJFQtyM1_HG",
+              "slot": 1,
+              "entrantAId": "D-Ees4ArqHuCxkmou0_Fx",
+              "entrantBId": "ut1ETjGFXChKiKza4o3t9",
+              "winnerEntrantId": null,
+              "status": "live",
+              "votes": [],
+              "updatedAt": "2026-04-08T19:35:33.693Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OLoKkMJj4sowLuXeSAUzk",
+      "title": "Previous Bracket",
+      "slug": "previous-bracket",
+      "status": "completed",
+      "publicToken": "yr2-bU_ImGrL86Lz",
+      "adminTokenHash": "7e72ec2948f4985cd63c9456150e16320cce21d0076bd6f292f216a8571931de",
+      "seedingMode": "manual",
+      "createdAt": "2026-04-08T19:35:33.693Z",
+      "publishedAt": "2026-04-08T19:35:33.693Z",
+      "totalPlayers": 4,
+      "roundDurationHours": 1,
+      "revoteDurationHours": 24,
+      "entrants": [
+        {
+          "id": "EbldYjIfIHOahn0zAdShd",
+          "name": "Kit Kat",
+          "seed": 1
+        },
+        {
+          "id": "E_qpH13L6-4yuwY3bKgoh",
+          "name": "Aero",
+          "seed": 2
+        }
+      ],
+      "rosterMembers": [
+        {
+          "id": "78JPkV__8siQEsKCGWwyx",
+          "name": "Gabe"
+        },
+        {
+          "id": "q9mDCuJVgF-Gvhm8I1EjV",
+          "name": "Alex"
+        },
+        {
+          "id": "eskhLvWktlWNYhkFYDypb",
+          "name": "Jordan"
+        },
+        {
+          "id": "IdK3HurxFHPYtLDAJovHT",
+          "name": "Sam"
+        }
+      ],
+      "rounds": [
+        {
+          "id": "IJr-RsRTrVvufVkf7Anih",
+          "number": 1,
+          "label": "Finals",
+          "startsAt": "2026-04-08T17:35:33.693Z",
+          "endsAt": "2026-04-08T18:35:33.693Z",
+          "status": "closed",
+          "matchups": [
+            {
+              "id": "AcPDotAw-GCgX5Su10NTB",
+              "slot": 1,
+              "entrantAId": "EbldYjIfIHOahn0zAdShd",
+              "entrantBId": "E_qpH13L6-4yuwY3bKgoh",
+              "winnerEntrantId": "EbldYjIfIHOahn0zAdShd",
+              "status": "closed",
+              "votes": [],
+              "updatedAt": "2026-04-08T19:35:33.693Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }
