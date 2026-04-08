@@ -232,6 +232,20 @@ export function BracketClient({
     };
   }, [currentRound, hydrated, nowTick]);
 
+  function handleRosterSelection(nextRosterMemberId: string | null) {
+    setError(null);
+    setPendingVotes({});
+    setSelectedRosterMemberId(nextRosterMemberId);
+
+    if (mode === "public") {
+      void fetch(`/api/brackets/${token}/identity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rosterMemberId: nextRosterMemberId }),
+      });
+    }
+  }
+
   async function vote(matchupId: string, entrantId: string) {
     setError(null);
     if (!selectedRosterMemberId) {
@@ -300,6 +314,41 @@ export function BracketClient({
 
   return (
     <div className="stack-lg">
+      {mode === "public" && !selectedRosterMemberId ? (
+        <div className="identity-modal-backdrop" role="presentation">
+          <section
+            aria-labelledby="identity-modal-title"
+            aria-modal="true"
+            className="identity-modal panel stack-md"
+            role="dialog"
+          >
+            <div className="stack-sm">
+              <span className="eyebrow">Who Are You?</span>
+              <h2 id="identity-modal-title">Choose your name to enter the bracket.</h2>
+              <p className="muted">
+                Pick your name once and we&apos;ll remember it on this browser next time.
+              </p>
+            </div>
+            <label className="field">
+              <span className="sr-only">Select your name</span>
+              <select
+                autoFocus
+                className="identity-select identity-modal-select"
+                value={selectedRosterMemberId ?? ""}
+                onChange={(event) => handleRosterSelection(event.target.value || null)}
+              >
+                <option value="">Choose your name</option>
+                {snapshot.rosterMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+        </div>
+      ) : null}
+
       {mode === "admin" ? (
         <section className="panel board-header">
           <div className="stack-sm">
@@ -337,19 +386,7 @@ export function BracketClient({
               <select
                 className="identity-select"
                 value={selectedRosterMemberId ?? ""}
-                onChange={(event) => {
-                  const nextRosterMemberId = event.target.value || null;
-                  setError(null);
-                  setPendingVotes({});
-                  setSelectedRosterMemberId(nextRosterMemberId);
-                  if (mode === "public") {
-                    void fetch(`/api/brackets/${token}/identity`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ rosterMemberId: nextRosterMemberId }),
-                    });
-                  }
-                }}
+                onChange={(event) => handleRosterSelection(event.target.value || null)}
               >
                 <option value="">Choose your name</option>
                 {snapshot.rosterMembers.map((member) => (
@@ -359,9 +396,6 @@ export function BracketClient({
                 ))}
               </select>
             </label>
-            <p className="muted">
-              Pick your name once, then vote across the current round without browser loopholes.
-            </p>
           </div>
         </section>
       )}
