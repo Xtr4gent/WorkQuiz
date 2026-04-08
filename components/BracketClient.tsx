@@ -338,6 +338,7 @@ export function BracketClient({
                 className="identity-select"
                 value={selectedRosterMemberId ?? ""}
                 onChange={(event) => {
+                  setError(null);
                   setPendingVotes({});
                   setSelectedRosterMemberId(event.target.value || null);
                 }}
@@ -472,6 +473,7 @@ export function BracketClient({
                 const selectedEntrantId = pendingVotes[matchup.id] ?? matchup.voteState.votedEntrantId;
                 const canSubmitVote =
                   matchup.voteState.canVote &&
+                  !!selectedRosterMemberId &&
                   !!selectedEntrantId &&
                   selectedEntrantId !== matchup.voteState.votedEntrantId;
                 return (
@@ -480,7 +482,7 @@ export function BracketClient({
                       className={`entrant-button ${winnerA ? "winner" : ""} ${
                         selectedEntrantId === matchup.entrantA?.id ? "selected" : ""
                       }`}
-                      disabled={!matchup.voteState.canVote || !matchup.entrantA}
+                      disabled={!selectedRosterMemberId || !matchup.voteState.canVote || !matchup.entrantA}
                       onClick={() =>
                         matchup.entrantA &&
                         setPendingVotes((current) => ({
@@ -499,7 +501,7 @@ export function BracketClient({
                       className={`entrant-button ${winnerB ? "winner" : ""} ${
                         selectedEntrantId === matchup.entrantB?.id ? "selected" : ""
                       }`}
-                      disabled={!matchup.voteState.canVote || !matchup.entrantB}
+                      disabled={!selectedRosterMemberId || !matchup.voteState.canVote || !matchup.entrantB}
                       onClick={() =>
                         matchup.entrantB &&
                         setPendingVotes((current) => ({
