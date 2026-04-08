@@ -232,6 +232,12 @@ export function BracketClient({
     };
   }, [currentRound, hydrated, nowTick]);
 
+  const selectedRosterMemberName = useMemo(
+    () =>
+      snapshot.rosterMembers.find((member) => member.id === selectedRosterMemberId)?.name ?? null,
+    [selectedRosterMemberId, snapshot.rosterMembers],
+  );
+
   function handleRosterSelection(nextRosterMemberId: string | null) {
     setError(null);
     setPendingVotes({});
@@ -380,22 +386,17 @@ export function BracketClient({
             </strong>
           </div>
           <div className="panel identity-panel stack-sm">
-            <span className="eyebrow">Who Are You?</span>
-            <label className="field">
-              <span className="sr-only">Select your name</span>
-              <select
-                className="identity-select"
-                value={selectedRosterMemberId ?? ""}
-                onChange={(event) => handleRosterSelection(event.target.value || null)}
+            <span className="eyebrow">Identity</span>
+            <div className="identity-summary">
+              <strong>You are: {selectedRosterMemberName ?? "Not selected"}</strong>
+              <button
+                className="secondary-button"
+                onClick={() => handleRosterSelection(null)}
+                type="button"
               >
-                <option value="">Choose your name</option>
-                {snapshot.rosterMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                Log out
+              </button>
+            </div>
           </div>
         </section>
       )}
