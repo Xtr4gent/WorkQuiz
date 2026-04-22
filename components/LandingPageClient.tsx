@@ -19,7 +19,7 @@ const STEPS = [
   {
     num: "03",
     title: "Office Votes",
-    desc: "Everyone clicks the link and picks their favourite, no sign-up needed.",
+    desc: "Everyone clicks the link and picks their favourite — no sign-up needed.",
   },
   {
     num: "04",
@@ -37,7 +37,7 @@ export default function LandingPageClient({
   initialIsLive,
   pastTopics,
 }: LandingPageClientProps) {
-  const [isLive, setIsLive] = useState<boolean>(initialIsLive);
+  const [isLive, setIsLive] = useState<boolean | null>(initialIsLive);
 
   useEffect(() => {
     async function check() {
@@ -51,48 +51,52 @@ export default function LandingPageClient({
     }
 
     void check();
-    const intervalId = window.setInterval(() => {
+    const id = window.setInterval(() => {
       void check();
     }, 30000);
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(id);
     };
   }, []);
 
   useEffect(() => {
-    const elements = document.querySelectorAll<HTMLElement>(".reveal");
-    const observer = new IntersectionObserver(
+    const els = document.querySelectorAll<HTMLElement>(".reveal");
+    const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add("in");
-            observer.unobserve(entry.target);
+            io.unobserve(entry.target);
           }
         });
       },
       { threshold: 0.1 },
     );
 
-    elements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
   }, []);
+
+  const liveKnown = isLive !== null;
 
   return (
     <main>
-      <div className={`live-strip ${isLive ? "live-strip--on" : "live-strip--off"}`}>
-        <span className="live-strip__dot" />
-        {isLive ? (
-          <>
-            Tournament is live right now,{" "}
-            <Link href="/current" className="live-strip__link">
-              {"join the vote ->"}
-            </Link>
-          </>
-        ) : (
-          "No tournament running right now, check back soon"
-        )}
-      </div>
+      {liveKnown ? (
+        <div className={`live-strip ${isLive ? "live-strip--on" : "live-strip--off"}`}>
+          <span className="live-strip__dot" />
+          {isLive ? (
+            <>
+              Tournament is live right now —{" "}
+              <Link href="/current" className="live-strip__link">
+                join the vote →
+              </Link>
+            </>
+          ) : (
+            "No tournament running right now — check back soon"
+          )}
+        </div>
+      ) : null}
 
       <section className="lp-hero shell">
         <div className="lp-hero__copy">
@@ -111,17 +115,17 @@ export default function LandingPageClient({
               href="/current"
               className={`primary-button lp-cta-main ${isLive ? "" : "lp-cta-dim"}`}
             >
-              {isLive ? "Cast Your Vote ->" : "View Current Tournament ->"}
+              {isLive ? "Cast Your Vote →" : "View Current Tournament →"}
             </Link>
             <a href="#how" className="pill">
-              How it works
+              How it works ↓
             </a>
           </div>
         </div>
 
         <div className="panel lp-bracket-card">
           <span className="eyebrow">Live example</span>
-          <p className="lp-bracket-card__topic">Best 90s Movie</p>
+          <p className="lp-bracket-card__topic">🎬 Best 90s Movie</p>
           <div className="lp-bracket">
             <div className="lp-bracket__col">
               <p className="lp-bracket__label">Semis</p>
@@ -134,7 +138,7 @@ export default function LandingPageClient({
                 <div className="lp-bracket__opt lp-bracket__opt--win">Jurassic Park</div>
               </div>
             </div>
-            <div className="lp-bracket__arrow">&gt;</div>
+            <div className="lp-bracket__arrow">›</div>
             <div className="lp-bracket__col">
               <p className="lp-bracket__label">Final</p>
               <div className="lp-bracket__match" style={{ marginTop: 28 }}>
@@ -142,11 +146,11 @@ export default function LandingPageClient({
                 <div className="lp-bracket__opt lp-bracket__opt--lose">Jurassic Park</div>
               </div>
             </div>
-            <div className="lp-bracket__arrow">&gt;</div>
+            <div className="lp-bracket__arrow">›</div>
             <div className="lp-bracket__col">
               <p className="lp-bracket__label">Champion</p>
               <div className="lp-bracket__match" style={{ marginTop: 28 }}>
-                <div className="lp-bracket__opt lp-bracket__opt--champ">The Matrix</div>
+                <div className="lp-bracket__opt lp-bracket__opt--champ">🏆 The Matrix</div>
               </div>
             </div>
           </div>
@@ -223,7 +227,7 @@ export default function LandingPageClient({
                 </span>
                 <p className="lp-topic-card__topic">{topic.title}</p>
                 <p className="eyebrow lp-topic-card__champion-label">Champion</p>
-                <p className="lp-topic-card__winner">{topic.winnerName}</p>
+                <p className="lp-topic-card__winner">🏆 {topic.winnerName}</p>
                 <div className="lp-topic-card__tags">
                   {topic.entrantNames.map((contender) => (
                     <span
@@ -240,12 +244,16 @@ export default function LandingPageClient({
             ))
           ) : (
             <div className="panel lp-topic-card reveal">
-              <span className="eyebrow lp-topic-card__eyebrow">No history yet</span>
-              <p className="lp-topic-card__topic">Your first office debate will show up here.</p>
-              <p className="muted">
-                Once a bracket finishes, the landing page will automatically show the topic and
-                champion.
-              </p>
+              <span className="eyebrow lp-topic-card__eyebrow">Tournament #1</span>
+              <p className="lp-topic-card__topic">Best Chocolate Bar</p>
+              <p className="eyebrow lp-topic-card__champion-label">Champion</p>
+              <p className="lp-topic-card__winner">🏆 Waiting for first winner</p>
+              <div className="lp-topic-card__tags">
+                <span className="lp-topic-card__tag">Mars</span>
+                <span className="lp-topic-card__tag">Kit Kat</span>
+                <span className="lp-topic-card__tag">Coffee Crisp</span>
+                <span className="lp-topic-card__tag">Reese&apos;s</span>
+              </div>
             </div>
           )}
         </div>
@@ -258,10 +266,10 @@ export default function LandingPageClient({
           <p className="muted lp-cta-panel__sub">Takes 10 seconds. Arguments last all week.</p>
           <div className="lp-cta-panel__actions">
             <Link href="/current" className="primary-button">
-              {isLive ? "Cast Your Vote ->" : "View Tournament ->"}
+              {isLive ? "Cast Your Vote →" : "View Tournament →"}
             </Link>
             <Link href="/setup" className="pill">
-              {"Admin Setup ->"}
+              Admin Setup →
             </Link>
           </div>
           <p className="muted lp-cta-panel__link">quiz.hamiltons.cloud/current</p>
