@@ -14,6 +14,12 @@ import {
   markBracketAsCurrentPublic,
   restartBracket,
 } from "@/lib/workquiz/bracket";
+import {
+  buildExpectedAdminSessionValue,
+  hasValidAdminSessionValue,
+  isAdminAuthConfigured,
+  sanitizeAdminRedirectTarget,
+} from "@/lib/workquiz/admin-auth";
 import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
 
 const roster = ["Gabe", "Alex", "Jordan", "Sam"];
@@ -438,4 +444,41 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
   assert.equal(history[0].title, "Best Soda");
   assert.equal(history[0].winnerName, "Pepsi");
   assert.equal(history[1].title, "Best Chocolate Bar");
+});
+
+test("admin auth session token matches the configured env credentials", async () => {
+  const previousUsername = process.env.WORKQUIZ_ADMIN_USERNAME;
+  const previousPassword = process.env.WORKQUIZ_ADMIN_PASSWORD;
+
+  process.env.WORKQUIZ_ADMIN_USERNAME = "admin";
+  process.env.WORKQUIZ_ADMIN_PASSWORD = "swordfish";
+
+  try {
+    assert.equal(isAdminAuthConfigured(), true);
+    const sessionValue = await buildExpectedAdminSessionValue();
+
+    assert.ok(sessionValue);
+    assert.equal(await hasValidAdminSessionValue(sessionValue), true);
+    assert.equal(await hasValidAdminSessionValue("not-the-right-cookie"), false);
+  } finally {
+    if (previousUsername === undefined) {
+      delete process.env.WORKQUIZ_ADMIN_USERNAME;
+    } else {
+      process.env.WORKQUIZ_ADMIN_USERNAME = previousUsername;
+    }
+
+    if (previousPassword === undefined) {
+      delete process.env.WORKQUIZ_ADMIN_PASSWORD;
+    } else {
+      process.env.WORKQUIZ_ADMIN_PASSWORD = previousPassword;
+    }
+  }
+});
+
+test("sanitizeAdminRedirectTarget only allows safe in-app page routes", () => {
+  assert.equal(sanitizeAdminRedirectTarget("/setup"), "/setup");
+  assert.equal(sanitizeAdminRedirectTarget("/admin/token-123?tab=votes"), "/admin/token-123?tab=votes");
+  assert.equal(sanitizeAdminRedirectTarget("https://evil.example/steal"), "/setup");
+  assert.equal(sanitizeAdminRedirectTarget("//evil.example/steal"), "/setup");
+  assert.equal(sanitizeAdminRedirectTarget("/api/admin/secret"), "/setup");
 });
