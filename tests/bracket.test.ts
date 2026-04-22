@@ -21,6 +21,7 @@ import {
   isAdminAuthConfigured,
   sanitizeAdminRedirectTarget,
 } from "@/lib/workquiz/admin-auth";
+import { DEFAULT_LANDING_HISTORY } from "@/lib/workquiz/landing-history";
 import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
 
 const roster = ["Gabe", "Alex", "Jordan", "Sam"];
@@ -523,4 +524,15 @@ test("status route reports live state separately from current bracket presence",
   assert.equal(body.hasCurrentBracket, true);
   assert.equal(body.currentTitle, "Best Chocolate Bar");
   assert.equal(Array.isArray(body.history), true);
+});
+
+test("status route falls back to the single real landing tournament when history is empty", async () => {
+  resetStore();
+
+  const response = await getStatusRoute();
+  const body = await response.json();
+
+  assert.equal(body.live, false);
+  assert.equal(body.hasCurrentBracket, false);
+  assert.deepEqual(body.history, DEFAULT_LANDING_HISTORY);
 });

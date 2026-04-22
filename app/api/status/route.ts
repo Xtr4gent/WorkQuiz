@@ -6,6 +6,7 @@ import {
   findCurrentPublicBracket,
   listBracketHistory,
 } from "@/lib/workquiz/bracket";
+import { DEFAULT_LANDING_HISTORY } from "@/lib/workquiz/landing-history";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,11 @@ export async function GET() {
   const bracket = findCurrentPublicBracket();
   const snapshot = bracket ? buildSnapshot(bracket) : null;
   const live = snapshot?.rounds.some((round) => round.status === "live") ?? false;
+  const history = listBracketHistory(6).map((item) => ({
+    topic: item.title,
+    winner: item.winnerName,
+    runners: item.entrantNames,
+  }));
 
   return NextResponse.json(
     {
@@ -22,11 +28,7 @@ export async function GET() {
       currentTitle: bracket?.title ?? null,
       currentUrl: "/current",
       adminUrl: "/admin-login",
-      history: listBracketHistory(6).map((item) => ({
-        topic: item.title,
-        winner: item.winnerName,
-        runners: item.entrantNames,
-      })),
+      history: history.length > 0 ? history : DEFAULT_LANDING_HISTORY,
     },
     {
       headers: {
