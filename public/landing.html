@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bored@Work — Office Tournament Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d10;
+    --bg2: #111116;
+    --lime: #c8f53c;
+    --coral: #ff5e3a;
+    --purple: #9b6dff;
+    --white: #f0f0ee;
+    --muted: #555568;
+    --card: #18181f;
+    --border: rgba(255,255,255,0.07);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--white); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 1000; opacity: 0.4;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 48px;
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    background: rgba(13,13,16,0.75);
+  }
+  .nav-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; }
+  .nav-logo span { color: var(--lime); }
+  .nav-cta {
+    background: var(--lime); color: #0d0d10;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
+    padding: 10px 22px; border-radius: 100px; text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .nav-cta:hover { transform: scale(1.05); box-shadow: 0 0 24px rgba(200,245,60,0.4); }
+
+  /* ── HERO ── */
+  #hero {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 120px 24px 80px;
+    position: relative; overflow: hidden;
+  }
+  .hero-glow {
+    position: absolute; border-radius: 50%;
+    filter: blur(120px); pointer-events: none;
+  }
+  .hero-glow-1 { width:600px;height:600px; background:rgba(200,245,60,0.08); top:-100px;left:-100px; animation: drift1 8s ease-in-out infinite alternate; }
+  .hero-glow-2 { width:500px;height:500px; background:rgba(255,94,58,0.07); bottom:-100px;right:-100px; animation: drift2 10s ease-in-out infinite alternate; }
+  .hero-glow-3 { width:400px;height:400px; background:rgba(155,109,255,0.06); top:50%;right:20%; animation: drift1 12s ease-in-out infinite alternate; }
+  @keyframes drift1 { from{transform:translate(0,0)scale(1)} to{transform:translate(60px,40px)scale(1.1)} }
+  @keyframes drift2 { from{transform:translate(0,0)scale(1)} to{transform:translate(-50px,60px)scale(.9)} }
+
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(200,245,60,0.1); border: 1px solid rgba(200,245,60,0.25);
+    color: var(--lime); font-size: 13px; font-weight: 500;
+    padding: 6px 14px; border-radius: 100px; margin-bottom: 36px;
+    letter-spacing: 0.5px; animation: fadeUp 0.8s ease both;
+    transition: background 0.5s, border-color 0.5s, color 0.5s;
+  }
+  .hero-badge.offline {
+    background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: var(--muted);
+  }
+  .hero-badge.checking {
+    background: rgba(155,109,255,0.1); border-color: rgba(155,109,255,0.25); color: var(--purple);
+  }
+  .badge-dot {
+    width:6px;height:6px;background:currentColor;border-radius:50%;animation:pulse 2s ease-in-out infinite;
+    transition: background 0.5s;
+  }
+  .hero-badge.offline .badge-dot { animation: none; opacity: 0.4; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+  /* live status bar */
+  .status-strip {
+    display: none;
+    align-items: center; justify-content: center; gap: 10px;
+    padding: 10px 24px;
+    font-size: 13px; font-weight: 500;
+    position: relative; z-index: 99;
+  }
+  .status-strip.live {
+    display: flex;
+    background: rgba(200,245,60,0.08);
+    border-bottom: 1px solid rgba(200,245,60,0.15);
+    color: var(--lime);
+  }
+  .status-strip.offline {
+    display: flex;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    color: var(--muted);
+  }
+  .status-strip .ss-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+    flex-shrink: 0;
+  }
+  .status-strip.live .ss-dot { animation: pulse 1.5s ease-in-out infinite; }
+  .status-strip a { color: inherit; font-weight: 700; margin-left: 4px; }
+  .status-strip a:hover { text-decoration: underline; }
+
+  h1 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(60px, 9.5vw, 130px);
+    line-height: 0.92; letter-spacing: -3px;
+    animation: fadeUp 0.8s 0.1s ease both; position: relative; z-index: 1;
+  }
+  h1 .line-green { color: var(--lime); display: block; }
+  h1 .line-coral { color: var(--coral); display: block; }
+
+  .hero-sub {
+    margin-top: 28px; font-size: clamp(16px, 2vw, 21px);
+    color: rgba(240,240,238,0.55); font-weight: 300;
+    max-width: 560px; line-height: 1.6;
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+  .hero-cta-group {
+    display: flex; gap: 14px; margin-top: 44px;
+    flex-wrap: wrap; justify-content: center;
+    animation: fadeUp 0.8s 0.3s ease both;
+  }
+  .btn-primary {
+    background: var(--lime); color: #0d0d10;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px;
+    padding: 16px 36px; border-radius: 100px; text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 12px 40px rgba(200,245,60,0.35); }
+  .btn-secondary {
+    background: rgba(255,255,255,0.06); color: var(--white);
+    font-family: 'Syne', sans-serif; font-weight: 600; font-size: 16px;
+    padding: 16px 36px; border-radius: 100px; text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s, background 0.2s;
+  }
+  .btn-secondary:hover { transform: translateY(-3px); background: rgba(255,255,255,0.1); }
+
+  /* bracket preview floating */
+  .float-bracket {
+    position: absolute; pointer-events: none; opacity: 0;
+    animation: floatIn 1s forwards, floatBob var(--bob,5s) ease-in-out infinite var(--bd,0s);
+  }
+  @keyframes floatIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes floatBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  .fb1 { top:18%;left:4%;--bob:5s;--bd:0s;animation-delay:.5s; }
+  .fb2 { top:62%;left:3%;--bob:6s;--bd:1s;animation-delay:.8s; }
+  .fb3 { top:20%;right:4%;--bob:4.5s;--bd:.5s;animation-delay:.6s; }
+  .fb4 { top:68%;right:4%;--bob:5.5s;--bd:1.5s;animation-delay:1s; }
+  .mini-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 16px; font-size: 13px;
+    color: rgba(240,240,238,0.75); min-width: 170px;
+  }
+  .mini-card .mc-label { font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--lime);margin-bottom:6px; }
+  .mini-card .mc-vs { display:flex;flex-direction:column;gap:5px; }
+  .mc-opt {
+    padding: 6px 10px; border-radius: 7px;
+    border: 1px solid rgba(255,255,255,0.07); font-size:12px;
+  }
+  .mc-opt.win { border-color:var(--lime);color:var(--lime);background:rgba(200,245,60,0.08); }
+
+  .scroll-hint {
+    position:absolute;bottom:36px;left:50%;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    opacity:.35;font-size:11px;letter-spacing:2px;text-transform:uppercase;
+    animation:fadeUp 1s 1s ease both;
+  }
+  .scroll-line {
+    width:1px;height:40px;
+    background:linear-gradient(to bottom,var(--white),transparent);
+    animation:scrollDrop 2s ease-in-out infinite;
+  }
+  @keyframes scrollDrop {
+    0%{transform:scaleY(0);transform-origin:top} 50%{transform:scaleY(1);transform-origin:top}
+    51%{transform:scaleY(1);transform-origin:bottom} 100%{transform:scaleY(0);transform-origin:bottom}
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── TICKER ── */
+  .ticker-wrap {
+    overflow:hidden;border-top:1px solid rgba(255,255,255,0.06);
+    border-bottom:1px solid rgba(255,255,255,0.06);padding:16px 0;background:var(--card);
+  }
+  .ticker-track { display:flex;animation:ticker 24s linear infinite;white-space:nowrap; }
+  .ticker-item {
+    display:inline-flex;align-items:center;gap:20px;padding:0 32px;
+    font-family:'Syne',sans-serif;font-weight:700;font-size:14px;
+    letter-spacing:.5px;color:rgba(240,240,238,0.35);text-transform:uppercase;
+  }
+  .ticker-item .dot { width:6px;height:6px;border-radius:50%;background:var(--lime);flex-shrink:0; }
+  @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+  /* ── SHARED ── */
+  .reveal { opacity:0;transform:translateY(40px);transition:opacity .7s ease,transform .7s ease; }
+  .reveal.visible { opacity:1;transform:translateY(0); }
+  .reveal-left { opacity:0;transform:translateX(-40px);transition:opacity .7s ease,transform .7s ease; }
+  .reveal-left.visible { opacity:1;transform:translateX(0); }
+  .reveal-right { opacity:0;transform:translateX(40px);transition:opacity .7s ease,transform .7s ease; }
+  .reveal-right.visible { opacity:1;transform:translateX(0); }
+  .section-label { font-size:12px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--lime);margin-bottom:24px; }
+  .big-statement { font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(34px,5vw,68px);line-height:1.05;letter-spacing:-2px;text-wrap:pretty; }
+  .big-statement em { font-style:normal;color:var(--coral); }
+
+  /* ── WHAT IS IT ── */
+  #what { padding:140px 48px;max-width:1100px;margin:0 auto; }
+  .what-body { display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:80px;align-items:start; }
+  .what-text p { font-size:18px;color:rgba(240,240,238,0.6);line-height:1.75;font-weight:300;margin-bottom:20px; }
+  .what-text p strong { color:var(--white);font-weight:500; }
+
+  /* bracket demo */
+  .bracket-demo {
+    background: var(--card); border:1px solid var(--border);
+    border-radius: 20px; padding: 28px 24px;
+  }
+  .bracket-topic {
+    font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
+    color:var(--lime);letter-spacing:1px;text-transform:uppercase;
+    margin-bottom:20px;text-align:center;
+  }
+  .bracket-rounds { display:flex;gap:12px;align-items:center;justify-content:center; }
+  .bracket-col { display:flex;flex-direction:column;gap:10px; }
+  .bracket-col-label { font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);text-align:center;margin-bottom:4px; }
+  .b-match { display:flex;flex-direction:column;gap:4px; }
+  .b-opt {
+    padding: 8px 12px; border-radius:8px;font-size:13px;font-weight:500;
+    border:1px solid rgba(255,255,255,0.07);transition:all .3s;cursor:default;
+    background:rgba(255,255,255,0.03);
+  }
+  .b-opt.winner { border-color:var(--lime);color:var(--lime);background:rgba(200,245,60,0.08); }
+  .b-opt.loser { opacity:.35; }
+  .b-opt.champion { border-color:var(--coral);color:var(--coral);background:rgba(255,94,58,0.1); font-size:14px;font-weight:700; }
+  .bracket-arrow {
+    font-size:16px;color:var(--muted);align-self:center;flex-shrink:0;
+  }
+  .bracket-vs { text-align:center;font-size:10px;color:var(--muted);letter-spacing:1px; }
+
+  /* ── HOW ── */
+  #how { padding:120px 48px;background:var(--bg2); }
+  #how .inner { max-width:1100px;margin:0 auto; }
+  .steps { display:grid;grid-template-columns:repeat(4,1fr);gap:32px;margin-top:60px;position:relative; }
+  .steps::before {
+    content:'';position:absolute;top:27px;left:12%;right:12%;height:1px;
+    background:linear-gradient(to right,transparent,rgba(200,245,60,0.25),transparent);
+  }
+  .step { text-align:center; }
+  .step-num {
+    width:54px;height:54px;border-radius:50%;border:2px solid rgba(200,245,60,0.25);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--lime);
+    margin:0 auto 20px;background:var(--bg);position:relative;z-index:1;transition:all .3s;
+  }
+  .step:hover .step-num { background:rgba(200,245,60,0.1);border-color:var(--lime); }
+  .step-title { font-family:'Syne',sans-serif;font-weight:700;font-size:16px;margin-bottom:10px; }
+  .step-desc { font-size:13px;color:rgba(240,240,238,0.5);line-height:1.7; }
+
+  /* ── PAST TOPICS ── */
+  #topics-section { padding:120px 48px; }
+  #topics-section .inner { max-width:1100px;margin:0 auto; }
+  .topics-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:60px; }
+  .topic-card {
+    background: var(--card); border:1px solid var(--border);
+    border-radius: 16px; padding: 24px;
+    transition: transform .3s, border-color .3s;
+    position: relative; overflow: hidden;
+  }
+  .topic-card::before {
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(200,245,60,0.04),transparent);
+    opacity:0;transition:opacity .3s;
+  }
+  .topic-card:hover { transform:translateY(-4px);border-color:rgba(200,245,60,0.2); }
+  .topic-card:hover::before { opacity:1; }
+  .tc-round { font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px; }
+  .tc-topic { font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;line-height:1.3; }
+  .tc-winner-label { font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--lime);margin-bottom:6px; }
+  .tc-winner { font-size:15px;font-weight:500; }
+  .tc-votes { display:flex;gap:6px;margin-top:14px;flex-wrap:wrap; }
+  .tc-vote-tag {
+    font-size:11px;padding:3px 9px;border-radius:100px;
+    background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);
+    color:rgba(240,240,238,0.45);
+  }
+  .tc-vote-tag.won {
+    background:rgba(200,245,60,0.08);border-color:rgba(200,245,60,0.2);color:var(--lime);
+  }
+
+  /* ── CTA ── */
+  #cta { padding:160px 48px;text-align:center;position:relative; }
+  .cta-glow {
+    position:absolute;width:700px;height:400px;
+    background:radial-gradient(ellipse,rgba(200,245,60,0.07) 0%,transparent 70%);
+    top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;
+  }
+  .cta-inner { position:relative;z-index:1; }
+  .cta-label { font-size:12px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--coral);margin-bottom:24px; }
+  .cta-heading { font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(40px,6vw,90px);line-height:1;letter-spacing:-3px;margin-bottom:20px; }
+  .cta-sub { color:rgba(240,240,238,0.5);font-size:18px;margin-bottom:50px; }
+  .btn-giant {
+    display:inline-flex;align-items:center;gap:12px;
+    background:var(--lime);color:#0d0d10;
+    font-family:'Syne',sans-serif;font-weight:800;font-size:20px;
+    padding:22px 52px;border-radius:100px;text-decoration:none;
+    transition:transform .25s,box-shadow .25s;letter-spacing:-.3px;
+  }
+  .btn-giant:hover { transform:translateY(-4px)scale(1.03);box-shadow:0 20px 60px rgba(200,245,60,0.4); }
+  .btn-arrow { transition:transform .2s; }
+  .btn-giant:hover .btn-arrow { transform:translateX(4px); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top:1px solid rgba(255,255,255,0.06);padding:36px 48px;
+    display:flex;justify-content:space-between;align-items:center;
+    color:rgba(240,240,238,0.25);font-size:13px;flex-wrap:wrap;gap:12px;
+  }
+  footer a { color:var(--lime);text-decoration:none; }
+  footer a:hover { text-decoration:underline; }
+  .footer-admin { font-size:12px;opacity:.5; }
+
+  @media(max-width:768px){
+    nav{padding:16px 24px;}
+    .float-bracket{display:none;}
+    #what,#how,#topics-section,#cta{padding:80px 24px;}
+    .what-body,.steps,.topics-grid{grid-template-columns:1fr;}
+    .steps::before{display:none;}
+    .bracket-rounds{flex-wrap:wrap;}
+    footer{flex-direction:column;text-align:center;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Bored<span>@Work</span></div>
+  <a href="#" class="nav-cta" id="nav-play-btn">Vote Now →</a>
+</nav>
+
+<!-- STATUS STRIP -->
+<div class="status-strip" id="status-strip">
+  <span class="ss-dot"></span>
+  <span id="status-text">Checking tournament status…</span>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-glow hero-glow-1"></div>
+  <div class="hero-glow hero-glow-2"></div>
+  <div class="hero-glow hero-glow-3"></div>
+
+  <div class="float-bracket fb1">
+    <div class="mini-card">
+      <div class="mc-label">Semifinal</div>
+      <div class="mc-vs">
+        <div class="mc-opt win">🍕 Pizza</div>
+        <div class="mc-opt">🌮 Tacos</div>
+      </div>
+    </div>
+  </div>
+  <div class="float-bracket fb2">
+    <div class="mini-card">
+      <div class="mc-label">Final Round</div>
+      <div class="mc-vs">
+        <div class="mc-opt win">☕ Coffee</div>
+        <div class="mc-opt">🧋 Bubble Tea</div>
+      </div>
+    </div>
+  </div>
+  <div class="float-bracket fb3">
+    <div class="mini-card">
+      <div class="mc-label">Quarter Final</div>
+      <div class="mc-vs">
+        <div class="mc-opt">🎸 Rock</div>
+        <div class="mc-opt win">🎵 Pop</div>
+      </div>
+    </div>
+  </div>
+  <div class="float-bracket fb4">
+    <div class="mini-card">
+      <div class="mc-label">Champion 🏆</div>
+      <div class="mc-vs">
+        <div class="mc-opt win">Monday WFH</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-badge" id="hero-badge">
+    <span class="badge-dot"></span>
+    <span id="badge-text">Checking…</span>
+  </div>
+
+  <h1>
+    <span>Bored</span>
+    <span class="line-green">@Work</span>
+    <span class="line-coral">Tournament.</span>
+  </h1>
+
+  <p class="hero-sub">
+    A random topic. Everyone I like enough to invite. One winner. The only reason anyone pretends to enjoy coming into the office.
+  </p>
+
+  <div class="hero-cta-group">
+    <a href="#" class="btn-primary" id="hero-play-btn">Cast Your Vote →</a>
+    <a href="#how" class="btn-secondary">How it works</a>
+  </div>
+
+  <div class="scroll-hint">
+    <span>Scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-track">
+    <span class="ticker-item"><span class="dot"></span>Round Robin</span>
+    <span class="ticker-item"><span class="dot"></span>Single Elimination</span>
+    <span class="ticker-item"><span class="dot"></span>No Jon, You Can't Double Vote</span>
+    <span class="ticker-item"><span class="dot"></span>Site-Wide Voting</span>
+    <span class="ticker-item"><span class="dot"></span>One Vote Per Person, Jon</span>
+    <span class="ticker-item"><span class="dot"></span>Seriously Jon, Stop It</span>
+    <span class="ticker-item"><span class="dot"></span>Round Robin</span>
+    <span class="ticker-item"><span class="dot"></span>Single Elimination</span>
+    <span class="ticker-item"><span class="dot"></span>No Jon, You Can't Double Vote</span>
+    <span class="ticker-item"><span class="dot"></span>Site-Wide Voting</span>
+    <span class="ticker-item"><span class="dot"></span>One Vote Per Person, Jon</span>
+    <span class="ticker-item"><span class="dot"></span>Seriously Jon, Stop It</span>
+  </div>
+</div>
+
+<!-- WHAT IS IT -->
+<section id="what">
+  <p class="section-label reveal">What Is It</p>
+  <h2 class="big-statement reveal">The bracket game your<br>office didn't know<br>it <em>needed.</em></h2>
+
+  <div class="what-body">
+    <div class="what-text reveal-left">
+      <p><strong>Bored@Work is a round-robin single elimination tournament</strong> for your whole site. A random topic gets picked, options go head-to-head, and everyone votes to crown a champion.</p>
+      <p>It's the water cooler debate, but automated and actually fun. Best lunch spot, greatest movie ever made, which coworker makes the worst coffee — whatever the topic, feelings <em>will</em> get hurt.</p>
+      <p>I set it up. <strong>Everyone else shows up, votes once</strong> — yes, once, Jon — <strong>and watches the chaos unfold.</strong></p>
+    </div>
+    <div class="reveal-right">
+      <div class="bracket-demo">
+        <div class="bracket-topic">🎬 Best 90s Movie</div>
+        <div class="bracket-rounds">
+          <div class="bracket-col">
+            <div class="bracket-col-label">Semis</div>
+            <div class="b-match">
+              <div class="b-opt winner">The Matrix</div>
+              <div class="b-opt loser">Home Alone</div>
+            </div>
+            <div style="height:12px"></div>
+            <div class="b-match">
+              <div class="b-opt loser">Titanic</div>
+              <div class="b-opt winner">Jurassic Park</div>
+            </div>
+          </div>
+          <div class="bracket-arrow">›</div>
+          <div class="bracket-col">
+            <div class="bracket-col-label">Final</div>
+            <div class="b-match" style="margin-top:24px">
+              <div class="b-opt winner">The Matrix</div>
+              <div class="b-opt loser">Jurassic Park</div>
+            </div>
+          </div>
+          <div class="bracket-arrow">›</div>
+          <div class="bracket-col">
+            <div class="bracket-col-label">Champion</div>
+            <div class="b-match" style="margin-top:24px">
+              <div class="b-opt champion">🏆 The Matrix</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="inner">
+    <p class="section-label reveal">How It Works</p>
+    <h2 class="big-statement reveal">Four steps to crowning<br>an office legend.</h2>
+    <div class="steps">
+      <div class="step reveal" style="transition-delay:0s">
+        <div class="step-num">1</div>
+        <div class="step-title">Topic Drops</div>
+        <p class="step-desc">A random topic gets chosen. Could be food, movies, hot takes — anything that'll start an argument.</p>
+      </div>
+      <div class="step reveal" style="transition-delay:.12s">
+        <div class="step-num">2</div>
+        <div class="step-title">Options Face Off</div>
+        <p class="step-desc">Contenders are matched up head-to-head. Someone's favourite is going to get eliminated and they will not be okay about it.</p>
+      </div>
+      <div class="step reveal" style="transition-delay:.24s">
+        <div class="step-num">3</div>
+        <div class="step-title">Office Votes</div>
+        <p class="step-desc">Everyone clicks the link and votes. Once. One time. Jon, if you're reading this — no.</p>
+      </div>
+      <div class="step reveal" style="transition-delay:.36s">
+        <div class="step-num">4</div>
+        <div class="step-title">Champion Crowned</div>
+        <p class="step-desc">One option rises above the rest. Bragging rights are real. Rematches are inevitable. Jon will demand a recount.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAST TOPICS -->
+<section id="topics-section">
+  <div class="inner">
+    <p class="section-label reveal">Past Tournaments</p>
+    <h2 class="big-statement reveal">Battles that ended<br>friendships.</h2>
+    <div class="topics-grid" id="topics-grid">
+      <!-- populated by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- JON SECTION -->
+<section id="jon" style="padding:80px 48px;background:var(--bg2);">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;">
+      <div>
+        <p class="section-label" style="color:var(--coral);">A Special Message</p>
+        <h2 class="big-statement">Hey Jon.<br><em style="color:var(--coral);">I see you.</em></h2>
+        <p style="font-size:18px;color:rgba(240,240,238,0.6);line-height:1.75;font-weight:300;margin-top:24px;">
+          Every tournament, without fail, Jon is in a browser console trying to figure out if he can vote twice. Inspecting network requests. Opening incognito tabs. Submitting curl commands like a maniac.
+        </p>
+        <p style="font-size:18px;color:rgba(240,240,238,0.6);line-height:1.75;font-weight:300;margin-top:16px;">
+          Jon, buddy. It doesn't work. It has never worked. <strong style="color:var(--white);">You get one vote.</strong> The same one vote as everyone else, including people who had to google what a browser is. We're all equal here. Painfully, maddeningly equal.
+        </p>
+        <p style="font-size:18px;color:rgba(240,240,238,0.6);line-height:1.75;font-weight:300;margin-top:16px;">
+          I respect the hustle though. Genuinely. <strong style="color:var(--white);">It's still not going to work.</strong> 🙂
+        </p>
+      </div>
+      <div class="reveal-right">
+        <div style="background:var(--card);border:1px solid rgba(255,94,58,0.2);border-radius:20px;padding:32px;font-family:'DM Sans',sans-serif;">
+          <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--coral);margin-bottom:16px;font-weight:600;">Jon's Browser, Probably Right Now</div>
+          <div style="background:#0a0a0d;border-radius:10px;padding:20px;font-family:monospace;font-size:13px;line-height:1.8;color:#a8ff78;">
+            <span style="color:#666;">// attempt #47</span><br>
+            fetch(<span style="color:#ffd700;">'/api/vote'</span>, {<br>
+            &nbsp;&nbsp;method: <span style="color:#ffd700;">'POST'</span>,<br>
+            &nbsp;&nbsp;body: JSON.stringify({<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;vote: <span style="color:#ffd700;">'my_fav'</span>,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;totally_not_jon: <span style="color:#ff5e3a;">true</span><br>
+            &nbsp;&nbsp;})<br>
+            })<br><br>
+            <span style="color:#ff5e3a;">// Response: 403 Nice try, Jon.</span>
+          </div>
+          <p style="margin-top:16px;font-size:13px;color:rgba(240,240,238,0.4);line-height:1.6;">
+            Anti-cheat is built in. IP tracked. Session fingerprinted. Jon-proofed to the best of my ability (which, admittedly, Jon keeps testing).
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="cta-glow"></div>
+  <div class="cta-inner">
+    <p class="cta-label reveal">Ready?</p>
+    <h2 class="cta-heading reveal">Stop lurking.<br>Vote.</h2>
+    <p class="cta-sub reveal">Takes 10 seconds. The argument it starts will last the rest of the week.</p>
+    <div class="reveal">
+      <a href="#" class="btn-giant" id="cta-play-btn">
+        Play Bored@Work <span class="btn-arrow">→</span>
+      </a>
+    </div>
+    
+  </div>
+</section>
+
+<footer>
+  <span>© 2026 Bored@Work</span>
+  <a href="#" id="footer-player-link">Player link</a>
+  <span class="footer-admin">Admin? <a href="#" id="footer-admin-link">Admin portal →</a></span>
+</footer>
+
+<!-- TWEAKS PANEL -->
+<div id="tweaks-panel" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;
+  background:#18181f;border:1px solid rgba(255,255,255,0.1);border-radius:16px;
+  padding:24px;width:300px;font-family:'DM Sans',sans-serif;color:#f0f0ee;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+  <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:20px;color:var(--lime);">Tweaks</div>
+
+  <label style="font-size:12px;opacity:.5;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Player URL</label>
+  <input id="tw-player-url" type="text" placeholder="quiz.hamiltons.cloud"
+    style="width:100%;padding:9px 12px;border-radius:8px;background:#0d0d10;border:1px solid rgba(255,255,255,0.1);
+    color:#f0f0ee;font-size:13px;margin-bottom:14px;outline:none;">
+
+  <label style="font-size:12px;opacity:.5;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Admin URL</label>
+  <input id="tw-admin-url" type="text" placeholder="e.g. admin.hamiltons.cloud"
+    style="width:100%;padding:9px 12px;border-radius:8px;background:#0d0d10;border:1px solid rgba(255,255,255,0.1);
+    color:#f0f0ee;font-size:13px;margin-bottom:14px;outline:none;">
+
+  <label style="font-size:12px;opacity:.5;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tournament Status</label>
+  <div style="display:flex;gap:8px;margin-bottom:18px;">
+    <button onclick="setManualStatus('auto')" id="ms-auto" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-family:'Syne',sans-serif;font-weight:700;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#f0f0ee;cursor:pointer;">Auto</button>
+    <button onclick="setManualStatus('live')" id="ms-live" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-family:'Syne',sans-serif;font-weight:700;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#f0f0ee;cursor:pointer;">Force Live</button>
+    <button onclick="setManualStatus('offline')" id="ms-off" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-family:'Syne',sans-serif;font-weight:700;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#f0f0ee;cursor:pointer;">Force Off</button>
+  </div>
+
+  <label style="font-size:12px;opacity:.5;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Accent Color</label>
+  <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+    ${['#c8f53c','#ff5e3a','#9b6dff','#38d9f5','#ffb800'].map(c =>
+      `<div onclick="setAccent('${c}')" style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;" data-color="${c}"></div>`
+    ).join('')}
+  </div>
+
+  <button id="tw-save" style="width:100%;padding:11px;border-radius:10px;background:var(--lime);
+    color:#0d0d10;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;border:none;cursor:pointer;">
+    Save Changes
+  </button>
+</div>
+
+<script>
+// ── PAST TOPICS DATA ──
+const PAST_TOPICS = [
+  { topic: "Best Lunch Spot Near the Office", winner: "The Thai place on 3rd", runners: ["Pizza joint", "Sandwich bar", "Sushi express", "The Thai place on 3rd"] },
+  { topic: "Greatest 90s Movie", winner: "The Matrix", runners: ["Titanic", "Home Alone", "Jurassic Park", "The Matrix"] },
+  { topic: "Best WFH Perk", winner: "No commute", runners: ["Flexible hours", "Comfy pants", "Pets on calls", "No commute"] },
+  { topic: "Best Meeting-Free Day", winner: "Friday", runners: ["Monday", "Wednesday", "Thursday", "Friday"] },
+  { topic: "Office Snack Champion", winner: "Tim Tams", runners: ["Shapes", "Fruit bowl", "Corn chips", "Tim Tams"] },
+  { topic: "Best Team Lunch Option", winner: "BBQ at the park", runners: ["Catered sandwiches", "Pizza party", "Sushi train", "BBQ at the park"] },
+];
+
+function renderTopics(topics) {
+  const grid = document.getElementById('topics-grid');
+  grid.innerHTML = '';
+  topics.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'topic-card reveal';
+    card.style.transitionDelay = (i * 0.08) + 's';
+    card.innerHTML = `
+      <div class="tc-round">Tournament #${topics.length - i}</div>
+      <div class="tc-topic">${t.topic}</div>
+      <div class="tc-winner-label">Champion</div>
+      <div class="tc-winner">🏆 ${t.winner}</div>
+      <div class="tc-votes">
+        ${t.runners.map(r => `<span class="tc-vote-tag${r === t.winner ? ' won' : ''}">${r}</span>`).join('')}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  // re-observe new cards
+  grid.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+}
+
+// ── LIVE STATUS POLLING ──
+const PLAYER_URL = 'https://quiz.hamiltons.cloud/current';
+
+function setStatus(live) {
+  const strip = document.getElementById('status-strip');
+  const badge = document.getElementById('hero-badge');
+  const badgeText = document.getElementById('badge-text');
+  const statusText = document.getElementById('status-text');
+  const navBtn = document.getElementById('nav-play-btn');
+  const heroBtn = document.getElementById('hero-play-btn');
+  const ctaBtn = document.getElementById('cta-play-btn');
+
+  if (live) {
+    strip.className = 'status-strip live';
+    statusText.innerHTML = 'Tournament is live right now — <a href="' + PLAYER_URL + '" target="_blank">join the vote →</a>';
+    badge.className = 'hero-badge';
+    badgeText.textContent = 'Tournament live — vote now';
+    navBtn.textContent = 'Vote Now →';
+    heroBtn.textContent = 'Cast Your Vote →';
+    ctaBtn.innerHTML = 'Join the Tournament <span class="btn-arrow">→</span>';
+  } else {
+    strip.className = 'status-strip offline';
+    statusText.textContent = 'No tournament running right now — check back soon';
+    badge.className = 'hero-badge offline';
+    badgeText.textContent = 'No tournament running';
+    navBtn.textContent = 'Visit Game →';
+    heroBtn.textContent = 'Visit the Game →';
+    ctaBtn.innerHTML = 'Check It Out <span class="btn-arrow">→</span>';
+  }
+}
+
+async function checkStatus() {
+  if (tweakState.manualStatus !== 'auto') {
+    setStatus(tweakState.manualStatus === 'live');
+    return;
+  }
+  try {
+    // Try a proper fetch first (works if CORS headers are set on your server)
+    const res = await fetch(PLAYER_URL, { method: 'HEAD', mode: 'cors', cache: 'no-store' });
+    setStatus(res.ok);
+  } catch(e) {
+    // Fallback: no-cors opaque fetch — at least tells us if the server is reachable
+    try {
+      await fetch(PLAYER_URL, { method: 'GET', mode: 'no-cors', cache: 'no-store' });
+      // Opaque response = server responded somehow, assume live
+      setStatus(true);
+    } catch(e2) {
+      // Complete failure — server unreachable
+      setStatus(false);
+    }
+  }
+}
+
+// ── TWEAKS STATE ──
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "playerUrl": "https:\/\/quiz.hamiltons.cloud\/current",
+  "adminUrl": "",
+  "accentColor": "#c8f53c",
+  "manualStatus": "auto"
+}/*EDITMODE-END*/;
+
+let tweakState = {...TWEAK_DEFAULTS};
+
+function applyUrls() {
+  const pu = tweakState.playerUrl || 'quiz.hamiltons.cloud';
+  const au = tweakState.adminUrl;
+  const playerHref = pu.startsWith('http') ? pu : 'https://' + pu;
+  const adminHref = au ? (au.startsWith('http') ? au : 'https://' + au) : '#';
+
+  document.getElementById('nav-play-btn').href = playerHref;
+  document.getElementById('hero-play-btn').href = playerHref;
+  document.getElementById('cta-play-btn').href = playerHref;
+  document.getElementById('footer-player-link').href = playerHref;
+  document.getElementById('footer-player-link').textContent = pu;
+  document.getElementById('footer-admin-link').href = adminHref;
+  const ctaDisplay = document.getElementById('cta-url-display');
+  if (ctaDisplay) ctaDisplay.textContent = pu;
+  if (au) {
+    document.getElementById('footer-admin-link').parentElement.style.display = '';
+  } else {
+    document.getElementById('footer-admin-link').parentElement.style.display = 'none';
+  }
+}
+
+function applyAccent(c) {
+  document.documentElement.style.setProperty('--lime', c);
+}
+
+function applyTweaks() {
+  applyUrls();
+  applyAccent(tweakState.accentColor);
+}
+applyTweaks();
+
+// Initial check + poll every 30s
+checkStatus();
+setInterval(checkStatus, 30000);
+
+// ── INTERSECTION OBSERVER ──
+const revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => revealObserver.observe(el));
+
+// render topics
+renderTopics(PAST_TOPICS);
+
+// ── PARALLAX ──
+const heroEl = document.getElementById('hero');
+const heroH1 = heroEl.querySelector('h1');
+window.addEventListener('scroll', () => {
+  const y = window.scrollY;
+  if (y < window.innerHeight) {
+    heroH1.style.transform = `translateY(${y * 0.14}px)`;
+  }
+});
+
+// ── TWEAKS PANEL ──
+window.setManualStatus = (val) => {
+  tweakState.manualStatus = val;
+  ['auto','live','offline'].forEach(v => {
+    const btn = document.getElementById('ms-' + (v === 'offline' ? 'off' : v));
+    if (btn) btn.style.background = v === val ? 'rgba(200,245,60,0.15)' : 'rgba(255,255,255,0.05)';
+    if (btn) btn.style.borderColor = v === val ? 'rgba(200,245,60,0.4)' : 'rgba(255,255,255,0.1)';
+    if (btn) btn.style.color = v === val ? 'var(--lime)' : '#f0f0ee';
+  });
+  checkStatus();
+  window.parent.postMessage({type:'__edit_mode_set_keys', edits:{manualStatus: val}}, '*');
+};
+
+window.setAccent = (c) => {
+  tweakState.accentColor = c;
+  applyAccent(c);
+  window.parent.postMessage({type:'__edit_mode_set_keys', edits:{accentColor:c}}, '*');
+};
+
+document.getElementById('tw-player-url').addEventListener('input', e => {
+  tweakState.playerUrl = e.target.value;
+  applyUrls();
+});
+document.getElementById('tw-admin-url').addEventListener('input', e => {
+  tweakState.adminUrl = e.target.value;
+  applyUrls();
+});
+document.getElementById('tw-save').addEventListener('click', () => {
+  window.parent.postMessage({type:'__edit_mode_set_keys', edits:{
+    playerUrl: tweakState.playerUrl,
+    adminUrl: tweakState.adminUrl,
+    accentColor: tweakState.accentColor
+  }}, '*');
+  const btn = document.getElementById('tw-save');
+  btn.textContent = 'Saved ✓';
+  setTimeout(() => btn.textContent = 'Save Changes', 2000);
+});
+
+// populate tweak inputs with current values
+document.getElementById('tw-player-url').value = tweakState.playerUrl;
+document.getElementById('tw-admin-url').value = tweakState.adminUrl;
+
+window.addEventListener('message', e => {
+  if (e.data?.type === '__activate_edit_mode') document.getElementById('tweaks-panel').style.display = 'block';
+  if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display = 'none';
+});
+window.parent.postMessage({type:'__edit_mode_available'}, '*');
+</script>
+</body>
+</html>
