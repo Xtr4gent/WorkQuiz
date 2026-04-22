@@ -86,7 +86,7 @@ export default function LandingPageClient({
           <>
             Tournament is live right now,{" "}
             <Link href="/current" className="live-strip__link">
-              join the vote →
+              {"join the vote ->"}
             </Link>
           </>
         ) : (
@@ -111,10 +111,10 @@ export default function LandingPageClient({
               href="/current"
               className={`primary-button lp-cta-main ${isLive ? "" : "lp-cta-dim"}`}
             >
-              {isLive ? "Cast Your Vote →" : "View Current Tournament →"}
+              {isLive ? "Cast Your Vote ->" : "View Current Tournament ->"}
             </Link>
             <a href="#how" className="pill">
-              How it works ↓
+              How it works
             </a>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function LandingPageClient({
                 <div className="lp-bracket__opt lp-bracket__opt--win">Jurassic Park</div>
               </div>
             </div>
-            <div className="lp-bracket__arrow">›</div>
+            <div className="lp-bracket__arrow">&gt;</div>
             <div className="lp-bracket__col">
               <p className="lp-bracket__label">Final</p>
               <div className="lp-bracket__match" style={{ marginTop: 28 }}>
@@ -142,7 +142,7 @@ export default function LandingPageClient({
                 <div className="lp-bracket__opt lp-bracket__opt--lose">Jurassic Park</div>
               </div>
             </div>
-            <div className="lp-bracket__arrow">›</div>
+            <div className="lp-bracket__arrow">&gt;</div>
             <div className="lp-bracket__col">
               <p className="lp-bracket__label">Champion</p>
               <div className="lp-bracket__match" style={{ marginTop: 28 }}>
@@ -258,10 +258,10 @@ export default function LandingPageClient({
           <p className="muted lp-cta-panel__sub">Takes 10 seconds. Arguments last all week.</p>
           <div className="lp-cta-panel__actions">
             <Link href="/current" className="primary-button">
-              {isLive ? "Cast Your Vote →" : "View Tournament →"}
+              {isLive ? "Cast Your Vote ->" : "View Tournament ->"}
             </Link>
             <Link href="/setup" className="pill">
-              Admin Setup →
+              {"Admin Setup ->"}
             </Link>
           </div>
           <p className="muted lp-cta-panel__link">quiz.hamiltons.cloud/current</p>
