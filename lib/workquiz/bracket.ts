@@ -251,6 +251,7 @@ export function createBracket(input: CreateBracketInput) {
     title: input.title.trim(),
     slug: slugify(input.title) || `bracket-${nanoid(6)}`,
     status: "live",
+    isCurrentPublic: false,
     publicToken: nanoid(16),
     adminTokenHash: hashValue(adminToken),
     seedingMode: input.seedingMode,
@@ -419,6 +420,12 @@ export function findBracketByPublicToken(publicToken: string) {
   return readStore().brackets.find((bracket) => bracket.publicToken === publicToken) ?? null;
 }
 
+export function findCurrentPublicBracket() {
+  return (
+    readStore().brackets.find((bracket) => bracket.isCurrentPublic && bracket.status !== "disabled") ?? null
+  );
+}
+
 export function findBracketByAdminToken(adminToken: string) {
   const tokenHash = hashValue(adminToken);
   return readStore().brackets.find((bracket) => bracket.adminTokenHash === tokenHash) ?? null;
@@ -492,6 +499,7 @@ export function restartBracket(bracket: BracketRecord) {
 
 export function disableBracket(bracket: BracketRecord) {
   bracket.status = "disabled";
+  bracket.isCurrentPublic = false;
   for (const round of bracket.rounds) {
     if (round.status === "live" || round.status === "upcoming") {
       round.status = "closed";
@@ -503,6 +511,34 @@ export function disableBracket(bracket: BracketRecord) {
       }
     }
   }
+}
+
+export function markBracketAsCurrentPublic(adminToken: string) {
+  updateStore((store) => {
+    const targetHash = hashValue(adminToken);
+    const target = store.brackets.find((entry) => entry.adminTokenHash === targetHash);
+    if (!target) {
+      throw new Error("Bracket not found.");
+    }
+
+    if (target.status === "disabled") {
+      throw new Error("Disabled brackets cannot be marked current.");
+    }
+
+    for (const bracket of store.brackets) {
+      bracket.isCurrentPublic = bracket.id === target.id;
+    }
+
+    return store;
+  });
+
+  const updated = findBracketByAdminToken(adminToken);
+  if (!updated) {
+    throw new Error("Bracket not found.");
+  }
+
+  publish(updated.publicToken, { type: "current-public" });
+  return updated;
 }
 
 export function clearMatchupVote(params: {
@@ -633,6 +669,7 @@ export function buildSnapshot(
     title: bracket.title,
     slug: bracket.slug,
     status: bracket.status,
+    isCurrentPublic: bracket.isCurrentPublic,
     publicToken: bracket.publicToken,
     publicUrl: `/b/${bracket.publicToken}`,
     adminUrl:
@@ -668,6 +705,7 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
     title: input.title.trim(),
     slug: slugify(input.title) || `preview-${nanoid(4)}`,
     status: "live",
+    isCurrentPublic: false,
     publicToken: `preview-${nanoid(8)}`,
     adminTokenHash: "preview",
     seedingMode: input.seedingMode,

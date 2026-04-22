@@ -74,7 +74,6 @@ export function BracketClient({
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
-  const [connectionState, setConnectionState] = useState<"live" | "retrying">("retrying");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [pendingVotes, setPendingVotes] = useState<Record<string, string>>({});
   const [selectedRosterMemberId, setSelectedRosterMemberId] = useState<string | null>(
@@ -104,16 +103,11 @@ export function BracketClient({
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${scheme}://${window.location.host}/ws?token=${token}`);
 
-    ws.addEventListener("open", () => {
-      setConnectionState("live");
-    });
-
     ws.addEventListener("message", () => {
       void refresh();
     });
 
     ws.addEventListener("close", () => {
-      setConnectionState("retrying");
       interval = setInterval(() => {
         void refresh();
       }, 10000);
@@ -194,12 +188,20 @@ export function BracketClient({
     return new URL(snapshot.adminUrl, window.location.origin).toString();
   }, [hydrated, snapshot.adminUrl]);
 
+  const displayCurrentUrl = useMemo(() => {
+    if (!hydrated) {
+      return "/current";
+    }
+
+    return new URL("/current", window.location.origin).toString();
+  }, [hydrated]);
+
   const reuseTemplateBase = useMemo(() => {
     if (!adminToken) {
       return null;
     }
 
-    return `/?adminToken=${encodeURIComponent(adminToken)}`;
+    return `/setup?adminToken=${encodeURIComponent(adminToken)}`;
   }, [adminToken]);
 
   const currentRoundBanner = useMemo(() => {
@@ -246,7 +248,7 @@ export function BracketClient({
   );
 
   const createNewBracketHref = useMemo(
-    () => (adminToken ? `/?adminToken=${encodeURIComponent(adminToken)}` : "/"),
+    () => (adminToken ? `/setup?adminToken=${encodeURIComponent(adminToken)}` : "/setup"),
     [adminToken],
   );
 
@@ -375,6 +377,22 @@ export function BracketClient({
     setSnapshot(result);
   }
 
+  async function makeCurrentPublicNow() {
+    if (!adminToken) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/admin/${adminToken}/current`, { method: "POST" });
+    const result = (await response.json()) as BracketSnapshot & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "Could not mark this bracket as current.");
+      return;
+    }
+
+    setSnapshot(result);
+  }
+
   return (
     <div className="stack-lg">
       {mode === "public" && !selectedRosterMemberId ? (
@@ -429,8 +447,8 @@ export function BracketClient({
               <strong>{snapshot.totalVotes}</strong>
             </div>
             <div>
-              <span>Connection</span>
-              <strong>{connectionState === "live" ? "WebSocket live" : "Polling backup"}</strong>
+              <span>Public status</span>
+              <strong>{snapshot.isCurrentPublic ? "Live on /current" : "Not on /current"}</strong>
             </div>
           </div>
         </section>
@@ -474,6 +492,11 @@ export function BracketClient({
             <div className="admin-actions">
               {snapshot.status !== "disabled" ? (
                 <>
+                  {!snapshot.isCurrentPublic ? (
+                    <button className="primary-button" onClick={makeCurrentPublicNow} type="button">
+                      Make current public bracket
+                    </button>
+                  ) : null}
                   <button className="secondary-button" onClick={advanceNow} type="button">
                     Force advance now
                   </button>
@@ -488,6 +511,10 @@ export function BracketClient({
             </div>
           </div>
           <div className="link-stack">
+            <div>
+              <span className="muted">Stable public link</span>
+              <code>{snapshot.isCurrentPublic ? displayCurrentUrl : "/current (not active yet)"}</code>
+            </div>
             <div>
               <span className="muted">Public voting link</span>
               <code>{snapshot.status === "disabled" ? "Disabled" : displayPublicUrl}</code>

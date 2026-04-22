@@ -1,16 +1,6 @@
-import { CreateBracketForm } from "@/components/CreateBracketForm";
-import { findBracketByAdminToken, findBracketById } from "@/lib/workquiz/bracket";
+import Link from "next/link";
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ template?: string; adminToken?: string }>;
-}) {
-  const params = await searchParams;
-  const authorizedAdmin = params.adminToken ? findBracketByAdminToken(params.adminToken) : null;
-  const templateBracket =
-    authorizedAdmin && params.template ? findBracketById(params.template) : null;
-
+export default function HomePage() {
   return (
     <main className="shell landing-shell">
       <section className="hero">
@@ -18,31 +8,42 @@ export default async function HomePage({
           <span className="eyebrow">WorkQuiz</span>
           <h1>Turn random office debates into a real bracket night.</h1>
           <p className="hero-text">
-            The admin pastes a list, seeds the bracket, and drops one link in Teams.
-            Everyone else shows up to argue about candy bars, movie villains, or the
-            greatest fast food fry with live scores and a proper tournament board.
+            This is now the clean public front door. Players should use the live tournament
+            link, and admins should head straight to setup when it is time to build the next bracket.
           </p>
           <div className="hero-badges">
-            <span>Single elimination</span>
-            <span>WebSocket live board</span>
-            <span>One vote per browser</span>
+            <span>Stable live link</span>
+            <span>Separate setup surface</span>
+            <span>Cleaner public flow</span>
+          </div>
+          <div className="hero-badges">
+            <Link className="pill active" href="/current">
+              View current tournament
+            </Link>
+            <Link className="pill" href="/setup">
+              Open setup
+            </Link>
           </div>
         </div>
-        <CreateBracketForm
-          initialTemplate={
-            templateBracket
-              ? {
-                  title: templateBracket.title,
-                  entrants: templateBracket.entrants.map((entrant) => entrant.name),
-                  rosterMembers:
-                    templateBracket.rosterMembers?.map((member) => member.name) ??
-                    Array.from({ length: templateBracket.totalPlayers }, (_, index) => `Player ${index + 1}`),
-                  seedingMode: templateBracket.seedingMode,
-                  sourceTitle: templateBracket.title,
-                }
-              : null
-          }
-        />
+        <section className="panel stack-lg">
+          <div className="stack-sm">
+            <span className="eyebrow">How It Works</span>
+            <h2>Two clean surfaces now.</h2>
+            <p className="muted">
+              Public viewers go to the stable live route. You do your setup work on the dedicated admin setup page.
+            </p>
+          </div>
+          <div className="link-stack">
+            <div>
+              <span className="muted">Player-facing live route</span>
+              <code>/current</code>
+            </div>
+            <div>
+              <span className="muted">Admin setup route</span>
+              <code>/setup</code>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
   );

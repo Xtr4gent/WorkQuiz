@@ -47,6 +47,7 @@ export interface BracketRecord {
   title: string;
   slug: string;
   status: BracketStatus;
+  isCurrentPublic: boolean;
   publicToken: string;
   adminTokenHash: string;
   seedingMode: SeedingMode;
@@ -146,6 +147,7 @@ export interface BracketSnapshot {
   title: string;
   slug: string;
   status: BracketStatus;
+  isCurrentPublic: boolean;
   publicToken: string;
   publicUrl: string;
   adminUrl?: string;

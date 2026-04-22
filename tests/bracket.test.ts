@@ -9,6 +9,8 @@ import {
   clearMatchupVote,
   createBracket,
   disableBracket,
+  findCurrentPublicBracket,
+  markBracketAsCurrentPublic,
   restartBracket,
 } from "@/lib/workquiz/bracket";
 import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
@@ -286,6 +288,41 @@ test("clearMatchupVote removes one person's vote from a specific matchup", () =>
 
   assert.equal(snapshot.rounds[0].matchups[0].totalVotes, 0);
   assert.equal(snapshot.rounds[0].matchups[0].adminVotes?.length, 0);
+});
+
+test("markBracketAsCurrentPublic makes exactly one bracket the stable public tournament", () => {
+  resetStore();
+  const first = createBracket({
+    title: "First Bracket",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const second = createBracket({
+    title: "Second Bracket",
+    seedingMode: "manual",
+    entrants: ["Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  let current = markBracketAsCurrentPublic(first.adminToken);
+  assert.equal(current.title, "First Bracket");
+  assert.equal(findCurrentPublicBracket()?.id, first.bracket.id);
+
+  current = markBracketAsCurrentPublic(second.adminToken);
+  assert.equal(current.title, "Second Bracket");
+
+  const store = readStore();
+  assert.equal(store.brackets.find((entry) => entry.id === first.bracket.id)?.isCurrentPublic, false);
+  assert.equal(store.brackets.find((entry) => entry.id === second.bracket.id)?.isCurrentPublic, true);
+  assert.equal(findCurrentPublicBracket()?.id, second.bracket.id);
 });
 
 test("buildPreviewSnapshot preserves a provided random preview seed order", () => {
