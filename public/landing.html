@@ -346,7 +346,7 @@
 
 <nav>
   <div class="nav-logo">Bored<span>@Work</span></div>
-  <a href="#" class="nav-cta" id="nav-play-btn">Vote Now →</a>
+  <a href="/current" class="nav-cta" id="nav-play-btn">Vote Now →</a>
 </nav>
 
 <!-- STATUS STRIP -->
@@ -413,7 +413,7 @@
   </p>
 
   <div class="hero-cta-group">
-    <a href="#" class="btn-primary" id="hero-play-btn">Cast Your Vote →</a>
+    <a href="/current" class="btn-primary" id="hero-play-btn">Cast Your Vote →</a>
     <a href="#how" class="btn-secondary">How it works</a>
   </div>
 
@@ -578,7 +578,7 @@
     <h2 class="cta-heading reveal">Stop lurking.<br>Vote.</h2>
     <p class="cta-sub reveal">Takes 10 seconds. The argument it starts will last the rest of the week.</p>
     <div class="reveal">
-      <a href="#" class="btn-giant" id="cta-play-btn">
+      <a href="/current" class="btn-giant" id="cta-play-btn">
         Play Bored@Work <span class="btn-arrow">→</span>
       </a>
     </div>
@@ -588,8 +588,8 @@
 
 <footer>
   <span>© 2026 Bored@Work</span>
-  <a href="#" id="footer-player-link">Player link</a>
-  <span class="footer-admin">Admin? <a href="#" id="footer-admin-link">Admin portal →</a></span>
+  <a href="/current" id="footer-player-link">/current</a>
+  <span class="footer-admin">Admin? <a href="/admin-login" id="footer-admin-link">Admin portal →</a></span>
 </footer>
 
 <!-- TWEAKS PANEL -->
@@ -663,9 +663,9 @@ function renderTopics(topics) {
 }
 
 // ── LIVE STATUS POLLING ──
-const PLAYER_URL = 'https://quiz.hamiltons.cloud/current';
+const STATUS_URL = '/api/status';
 
-function setStatus(live) {
+function setStatus({ live, hasCurrentBracket, currentTitle, playerHref }) {
   const strip = document.getElementById('status-strip');
   const badge = document.getElementById('hero-badge');
   const badgeText = document.getElementById('badge-text');
@@ -676,49 +676,99 @@ function setStatus(live) {
 
   if (live) {
     strip.className = 'status-strip live';
-    statusText.innerHTML = 'Tournament is live right now — <a href="' + PLAYER_URL + '" target="_blank">join the vote →</a>';
+    const titleText = currentTitle ? currentTitle + ' is live right now' : 'Tournament is live right now';
+    statusText.innerHTML = titleText + ' — <a href="' + playerHref + '">join the vote →</a>';
     badge.className = 'hero-badge';
     badgeText.textContent = 'Tournament live — vote now';
     navBtn.textContent = 'Vote Now →';
     heroBtn.textContent = 'Cast Your Vote →';
     ctaBtn.innerHTML = 'Join the Tournament <span class="btn-arrow">→</span>';
+  } else if (hasCurrentBracket) {
+    strip.className = 'status-strip offline';
+    statusText.innerHTML =
+      (currentTitle ? currentTitle + ' is the current bracket' : 'Current bracket available now') +
+      ' — <a href="' + playerHref + '">view it →</a>';
+    badge.className = 'hero-badge offline';
+    badgeText.textContent = 'Current bracket ready to view';
+    navBtn.textContent = 'View Bracket →';
+    heroBtn.textContent = 'View the Bracket →';
+    ctaBtn.innerHTML = 'See the Current Bracket <span class="btn-arrow">→</span>';
   } else {
     strip.className = 'status-strip offline';
     statusText.textContent = 'No tournament running right now — check back soon';
     badge.className = 'hero-badge offline';
     badgeText.textContent = 'No tournament running';
-    navBtn.textContent = 'Visit Game →';
-    heroBtn.textContent = 'Visit the Game →';
+    navBtn.textContent = 'Check the Game →';
+    heroBtn.textContent = 'Check the Game →';
     ctaBtn.innerHTML = 'Check It Out <span class="btn-arrow">→</span>';
   }
 }
 
+function normalizeHref(value, fallback) {
+  if (!value) {
+    return fallback;
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) {
+    return value;
+  }
+
+  return 'https://' + value;
+}
+
 async function checkStatus() {
+  const playerHref = normalizeHref(tweakState.playerUrl, '/current');
+
   if (tweakState.manualStatus !== 'auto') {
-    setStatus(tweakState.manualStatus === 'live');
+    applyUrls();
+    setStatus({
+      live: tweakState.manualStatus === 'live',
+      hasCurrentBracket: true,
+      currentTitle: null,
+      playerHref,
+    });
     return;
   }
+
   try {
-    // Try a proper fetch first (works if CORS headers are set on your server)
-    const res = await fetch(PLAYER_URL, { method: 'HEAD', mode: 'cors', cache: 'no-store' });
-    setStatus(res.ok);
-  } catch(e) {
-    // Fallback: no-cors opaque fetch — at least tells us if the server is reachable
-    try {
-      await fetch(PLAYER_URL, { method: 'GET', mode: 'no-cors', cache: 'no-store' });
-      // Opaque response = server responded somehow, assume live
-      setStatus(true);
-    } catch(e2) {
-      // Complete failure — server unreachable
-      setStatus(false);
+    const res = await fetch(STATUS_URL, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error('status request failed');
     }
+
+    const data = await res.json();
+    const nextPlayerHref = normalizeHref(data.currentUrl || tweakState.playerUrl, '/current');
+    const nextAdminHref = normalizeHref(data.adminUrl || tweakState.adminUrl, '/admin-login');
+
+    tweakState.playerUrl = nextPlayerHref;
+    tweakState.adminUrl = nextAdminHref;
+    applyUrls();
+
+    if (Array.isArray(data.history) && data.history.length > 0) {
+      renderTopics(data.history);
+    }
+
+    setStatus({
+      live: Boolean(data.live),
+      hasCurrentBracket: Boolean(data.hasCurrentBracket),
+      currentTitle: data.currentTitle || null,
+      playerHref: nextPlayerHref,
+    });
+  } catch (e) {
+    applyUrls();
+    setStatus({
+      live: false,
+      hasCurrentBracket: false,
+      currentTitle: null,
+      playerHref,
+    });
   }
 }
 
 // ── TWEAKS STATE ──
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "playerUrl": "https:\/\/quiz.hamiltons.cloud\/current",
-  "adminUrl": "",
+  "playerUrl": "\/current",
+  "adminUrl": "\/admin-login",
   "accentColor": "#c8f53c",
   "manualStatus": "auto"
 }/*EDITMODE-END*/;
@@ -726,10 +776,10 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 let tweakState = {...TWEAK_DEFAULTS};
 
 function applyUrls() {
-  const pu = tweakState.playerUrl || 'quiz.hamiltons.cloud';
-  const au = tweakState.adminUrl;
-  const playerHref = pu.startsWith('http') ? pu : 'https://' + pu;
-  const adminHref = au ? (au.startsWith('http') ? au : 'https://' + au) : '#';
+  const pu = tweakState.playerUrl || '/current';
+  const au = tweakState.adminUrl || '/admin-login';
+  const playerHref = normalizeHref(pu, '/current');
+  const adminHref = normalizeHref(au, '/admin-login');
 
   document.getElementById('nav-play-btn').href = playerHref;
   document.getElementById('hero-play-btn').href = playerHref;
@@ -739,11 +789,7 @@ function applyUrls() {
   document.getElementById('footer-admin-link').href = adminHref;
   const ctaDisplay = document.getElementById('cta-url-display');
   if (ctaDisplay) ctaDisplay.textContent = pu;
-  if (au) {
-    document.getElementById('footer-admin-link').parentElement.style.display = '';
-  } else {
-    document.getElementById('footer-admin-link').parentElement.style.display = 'none';
-  }
+  document.getElementById('footer-admin-link').parentElement.style.display = '';
 }
 
 function applyAccent(c) {

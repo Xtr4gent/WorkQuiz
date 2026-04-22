@@ -14,6 +14,7 @@ import {
   markBracketAsCurrentPublic,
   restartBracket,
 } from "@/lib/workquiz/bracket";
+import { GET as getStatusRoute } from "@/app/api/status/route";
 import {
   buildExpectedAdminSessionValue,
   hasValidAdminSessionValue,
@@ -481,4 +482,45 @@ test("sanitizeAdminRedirectTarget only allows safe in-app page routes", () => {
   assert.equal(sanitizeAdminRedirectTarget("https://evil.example/steal"), "/setup");
   assert.equal(sanitizeAdminRedirectTarget("//evil.example/steal"), "/setup");
   assert.equal(sanitizeAdminRedirectTarget("/api/admin/secret"), "/setup");
+});
+
+test("status route reports live state separately from current bracket presence", async () => {
+  resetStore();
+
+  const { bracket, adminToken } = createBracket({
+    title: "Best Chocolate Bar",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  markBracketAsCurrentPublic(adminToken);
+
+  let response = await getStatusRoute();
+  let body = await response.json();
+
+  assert.equal(body.live, true);
+  assert.equal(body.hasCurrentBracket, true);
+  assert.equal(body.currentTitle, "Best Chocolate Bar");
+  assert.equal(body.currentUrl, "/current");
+  assert.equal(body.adminUrl, "/admin-login");
+
+  const store = readStore();
+  const storedBracket = store.brackets.find((entry) => entry.id === bracket.id)!;
+  storedBracket.rounds[0].matchups[0].winnerEntrantId = storedBracket.rounds[0].matchups[0].entrantAId;
+  storedBracket.rounds[0].matchups[0].status = "closed";
+  storedBracket.rounds[0].status = "closed";
+  storedBracket.status = "completed";
+  writeStore(store);
+
+  response = await getStatusRoute();
+  body = await response.json();
+
+  assert.equal(body.live, false);
+  assert.equal(body.hasCurrentBracket, true);
+  assert.equal(body.currentTitle, "Best Chocolate Bar");
+  assert.equal(Array.isArray(body.history), true);
 });
