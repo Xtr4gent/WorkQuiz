@@ -2,6 +2,8 @@ import { BracketClient } from "@/components/BracketClient";
 import { getRememberedRosterMemberId } from "@/lib/workquiz/auth";
 import { buildSnapshot, findCurrentPublicBracket } from "@/lib/workquiz/bracket";
 
+export const dynamic = "force-dynamic";
+
 export default async function CurrentBracketPage() {
   const bracket = findCurrentPublicBracket();
 

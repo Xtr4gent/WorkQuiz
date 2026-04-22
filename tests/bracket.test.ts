@@ -10,6 +10,7 @@ import {
   createBracket,
   disableBracket,
   findCurrentPublicBracket,
+  listBracketHistory,
   markBracketAsCurrentPublic,
   restartBracket,
 } from "@/lib/workquiz/bracket";
@@ -378,4 +379,63 @@ test("admin snapshot includes previous completed topics and winners", () => {
   assert.equal(snapshot.adminHistory?.length, 1);
   assert.equal(snapshot.adminHistory?.[0].title, "Previous Bracket");
   assert.equal(snapshot.adminHistory?.[0].winnerName, "Kit Kat");
+});
+
+test("listBracketHistory returns only real finished brackets in newest-first order", () => {
+  resetStore();
+
+  const { bracket: liveBracket } = createBracket({
+    title: "Still Live",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const { bracket: olderBracket } = createBracket({
+    title: "Best Chocolate Bar",
+    seedingMode: "manual",
+    entrants: ["Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const { bracket: newerBracket } = createBracket({
+    title: "Best Soda",
+    seedingMode: "manual",
+    entrants: ["Coke", "Pepsi"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const store = readStore();
+  const storedOlder = store.brackets.find((entry) => entry.id === olderBracket.id)!;
+  storedOlder.rounds[0].matchups[0].winnerEntrantId = storedOlder.rounds[0].matchups[0].entrantAId;
+  storedOlder.rounds[0].matchups[0].status = "closed";
+  storedOlder.rounds[0].status = "closed";
+  storedOlder.status = "completed";
+
+  const storedNewer = store.brackets.find((entry) => entry.id === newerBracket.id)!;
+  storedNewer.rounds[0].matchups[0].winnerEntrantId = storedNewer.rounds[0].matchups[0].entrantBId;
+  storedNewer.rounds[0].matchups[0].status = "closed";
+  storedNewer.rounds[0].status = "closed";
+  storedNewer.status = "disabled";
+  storedNewer.publishedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+  const storedLive = store.brackets.find((entry) => entry.id === liveBracket.id)!;
+  storedLive.publishedAt = new Date().toISOString();
+  writeStore(store);
+
+  const history = listBracketHistory();
+
+  assert.equal(history.length, 2);
+  assert.equal(history[0].title, "Best Soda");
+  assert.equal(history[0].winnerName, "Pepsi");
+  assert.equal(history[1].title, "Best Chocolate Bar");
 });

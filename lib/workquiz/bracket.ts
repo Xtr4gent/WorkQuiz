@@ -95,6 +95,16 @@ function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
     .sort((left, right) => new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime());
 }
 
+export function listBracketHistory(limit?: number) {
+  const history = buildAdminHistory();
+
+  if (typeof limit === "number") {
+    return history.slice(0, limit);
+  }
+
+  return history;
+}
+
 function buildRoundsForBracket(bracket: BracketRecord, startsAt: string, roundDurationHours: number) {
   const bracketSize = nextPowerOfTwo(bracket.entrants.length);
   const totalRounds = Math.log2(bracketSize);
