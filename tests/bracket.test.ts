@@ -203,6 +203,48 @@ test("buildSnapshot points at the next upcoming round before voting opens", () =
   assert.equal(snapshot.rounds[2].label, "Finals");
 });
 
+test("daily round windows reuse the same 6 AM to 8 PM window on following days", () => {
+  resetStore();
+  const { bracket } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: "2099-01-05T11:00:00.000Z",
+    endsAt: "2099-01-06T01:00:00.000Z",
+    totalPlayers: roster.length,
+  });
+
+  assert.equal(bracket.rounds[0].startsAt, "2099-01-05T11:00:00.000Z");
+  assert.equal(bracket.rounds[0].endsAt, "2099-01-06T01:00:00.000Z");
+  assert.equal(bracket.rounds[1].startsAt, "2099-01-06T11:00:00.000Z");
+  assert.equal(bracket.rounds[1].endsAt, "2099-01-07T01:00:00.000Z");
+});
+
+test("daily round windows wait overnight before opening the next round", () => {
+  resetStore();
+  const { bracket } = createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: "2026-04-20T10:00:00.000Z",
+    endsAt: "2026-04-21T00:00:00.000Z",
+    totalPlayers: roster.length,
+  });
+
+  advanceBracket(bracket, new Date("2026-04-21T01:00:00.000Z"));
+
+  assert.equal(bracket.rounds[0].status, "closed");
+  assert.equal(bracket.rounds[1].status, "upcoming");
+  assert.equal(bracket.rounds[1].matchups[0].status, "pending");
+
+  advanceBracket(bracket, new Date("2026-04-21T10:00:00.000Z"));
+
+  assert.equal(bracket.rounds[1].status, "live");
+  assert.equal(bracket.rounds[1].matchups[0].status, "live");
+});
+
 test("restartBracket clears votes and sends the bracket back to round one", () => {
   resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();

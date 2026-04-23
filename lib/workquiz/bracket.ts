@@ -28,7 +28,14 @@ import {
   slugify,
 } from "@/lib/workquiz/utils";
 
-function parseSchedule(startsAt: string, roundDurationHours: number, count: number) {
+function parseSchedule(startsAt: string, roundDurationHours: number, count: number, endsAt?: string) {
+  if (endsAt) {
+    return Array.from({ length: count }, (_, index) => ({
+      startsAt: addHours(startsAt, 24 * index),
+      endsAt: addHours(endsAt, 24 * index),
+    }));
+  }
+
   return Array.from({ length: count }, (_, index) => {
     const roundStart = index === 0 ? isoDate(startsAt) : addHours(startsAt, roundDurationHours * index);
     return {
@@ -105,10 +112,15 @@ export function listBracketHistory(limit?: number) {
   return history;
 }
 
-function buildRoundsForBracket(bracket: BracketRecord, startsAt: string, roundDurationHours: number) {
+function buildRoundsForBracket(
+  bracket: BracketRecord,
+  startsAt: string,
+  roundDurationHours: number,
+  endsAt?: string,
+) {
   const bracketSize = nextPowerOfTwo(bracket.entrants.length);
   const totalRounds = Math.log2(bracketSize);
-  const roundSchedule = parseSchedule(startsAt, roundDurationHours, totalRounds);
+  const roundSchedule = parseSchedule(startsAt, roundDurationHours, totalRounds, endsAt);
   const seedOrder = buildSeedOrder(bracketSize);
   const seedToEntrant = new Map(bracket.entrants.map((entrant) => [entrant.seed, entrant]));
 
@@ -275,7 +287,7 @@ export function createBracket(input: CreateBracketInput) {
     rounds: [],
   };
 
-  bracket.rounds = buildRoundsForBracket(bracket, input.startsAt, roundDurationHours);
+  bracket.rounds = buildRoundsForBracket(bracket, input.startsAt, roundDurationHours, input.endsAt);
 
   updateStore((store) => ({
     ...store,
@@ -385,10 +397,12 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
 
     const nextRound = bracket.rounds[roundIndex + 1];
     if (nextRound) {
-      nextRound.status = "live";
-      for (const matchup of nextRound.matchups) {
-        if (matchup.entrantAId && matchup.entrantBId && matchup.status === "pending") {
-          matchup.status = "live";
+      if (new Date(nextRound.startsAt).getTime() <= now.getTime()) {
+        nextRound.status = "live";
+        for (const matchup of nextRound.matchups) {
+          if (matchup.entrantAId && matchup.entrantBId && matchup.status === "pending") {
+            matchup.status = "live";
+          }
         }
       }
       resolveAutomaticWinners(bracket);
@@ -740,6 +754,7 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
     previewBracket,
     input.startsAt,
     previewBracket.roundDurationHours,
+    input.endsAt,
   );
 
   return buildSnapshot(previewBracket);

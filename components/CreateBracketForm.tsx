@@ -6,12 +6,72 @@ import { useRouter } from "next/navigation";
 import { BracketSnapshot, SeedingMode } from "@/lib/workquiz/types";
 import { parseEntrantsFromText } from "@/lib/workquiz/utils";
 
-const roundDurationHours = 24 * 7;
 const LAST_ROSTER_STORAGE_KEY = "workquiz:last-admin-roster";
+const LAST_TITLE_STORAGE_KEY = "workquiz:last-admin-title";
+const LAST_ENTRANTS_STORAGE_KEY = "workquiz:last-admin-entrants";
+const DEFAULT_TITLE = "Best Chocolate Snack";
+const DEFAULT_ENTRANTS = [
+  "Snickers",
+  "Kit Kat",
+  "Twix",
+  "Reese's Peanut Butter Cups",
+  "Hershey's Milk Chocolate",
+  "Cadbury Dairy Milk",
+  "Kinder Bueno",
+  "Crunch",
+  "Oh Henry!",
+  "Coffee Crisp",
+  "Mars",
+  "Crunchie",
+  "Aero",
+  "Caramilk",
+  "Skor",
+  "Wunderbar",
+  "Mr. Big",
+  "Hershey's cookies and creme",
+].join("\n");
+const DEFAULT_ROSTER = "Gabe\nAlex\nJordan\nSam\nPriya\nMaya\nLuca\nTaylor";
 
 function toLocalDateTimeValue(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
   return offsetDate.toISOString().slice(0, 16);
+}
+
+function toLocalDateValue(date: Date) {
+  return toLocalDateTimeValue(date).slice(0, 10);
+}
+
+function getNextSixAmRoundStart() {
+  const now = new Date();
+  const nextStart = new Date(now);
+  nextStart.setHours(6, 0, 0, 0);
+
+  if (nextStart.getTime() <= now.getTime()) {
+    nextStart.setDate(nextStart.getDate() + 1);
+  }
+
+  return nextStart;
+}
+
+function getSameDayEightPm(date: Date) {
+  const end = new Date(date);
+  end.setHours(20, 0, 0, 0);
+  return end;
+}
+
+function getRoundWindowForLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const start = new Date(year, month - 1, day, 6, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 20, 0, 0, 0);
+
+  return {
+    startsAt: toLocalDateTimeValue(start),
+    endsAt: toLocalDateTimeValue(end),
+  };
 }
 
 function move(items: string[], from: number, to: number) {
@@ -42,22 +102,16 @@ export function CreateBracketForm({
   } | null;
 }) {
   const router = useRouter();
-  const [title, setTitle] = useState(initialTemplate?.title ?? "Best Chocolate Bar");
-  const [entrantsText, setEntrantsText] = useState(
-    initialTemplate?.entrants.join("\n") ??
-      "Mars\nKit Kat\nCoffee Crisp\nReese's\nTwix\nSnickers\nOh Henry!\nAero",
-  );
+  const defaultRoundStart = useMemo(() => getNextSixAmRoundStart(), []);
+  const [title, setTitle] = useState(initialTemplate?.title ?? DEFAULT_TITLE);
+  const [entrantsText, setEntrantsText] = useState(initialTemplate?.entrants.join("\n") ?? DEFAULT_ENTRANTS);
   const [rosterText, setRosterText] = useState(
-    initialTemplate?.rosterMembers.join("\n") ??
-      "Gabe\nAlex\nJordan\nSam\nPriya\nMaya\nLuca\nTaylor",
+    initialTemplate?.rosterMembers.join("\n") ?? DEFAULT_ROSTER,
   );
   const [seedingMode, setSeedingMode] = useState<SeedingMode>(initialTemplate?.seedingMode ?? "manual");
-  const [startsAt, setStartsAt] = useState(() =>
-    toLocalDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)),
-  );
-  const [endsAt, setEndsAt] = useState(() =>
-    toLocalDateTimeValue(new Date(Date.now() + (30 + roundDurationHours * 60) * 60 * 1000)),
-  );
+  const [roundDate, setRoundDate] = useState(() => toLocalDateValue(defaultRoundStart));
+  const [startsAt, setStartsAt] = useState(() => toLocalDateTimeValue(defaultRoundStart));
+  const [endsAt, setEndsAt] = useState(() => toLocalDateTimeValue(getSameDayEightPm(defaultRoundStart)));
   const [previewSeededEntrants, setPreviewSeededEntrants] = useState<string[]>(() =>
     initialTemplate?.seedingMode === "random"
       ? shufflePreview(initialTemplate.entrants)
@@ -68,7 +122,7 @@ export function CreateBracketForm({
   const [previewSnapshot, setPreviewSnapshot] = useState<BracketSnapshot | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [isRosterStorageReady, setIsRosterStorageReady] = useState(Boolean(initialTemplate?.rosterMembers.length));
+  const [isStorageReady, setIsStorageReady] = useState(Boolean(initialTemplate));
 
   const entrants = useMemo(() => parseEntrantsFromText(entrantsText), [entrantsText]);
   const rosterMembers = useMemo(() => parseEntrantsFromText(rosterText), [rosterText]);
@@ -138,16 +192,28 @@ export function CreateBracketForm({
   }, [endsAt, entrants, previewIsValid, previewSeededEntrants, rosterMembers, seedingMode, startsAt, title]);
 
   useEffect(() => {
-    if (initialTemplate?.rosterMembers.length) {
+    if (initialTemplate) {
       return;
     }
 
+    const rememberedTitle = window.localStorage.getItem(LAST_TITLE_STORAGE_KEY);
+    const rememberedEntrants = window.localStorage.getItem(LAST_ENTRANTS_STORAGE_KEY);
     const rememberedRoster = window.localStorage.getItem(LAST_ROSTER_STORAGE_KEY);
     const timeout = window.setTimeout(() => {
+      if (rememberedTitle?.trim()) {
+        setTitle(rememberedTitle);
+      }
+
+      if (rememberedEntrants?.trim()) {
+        const nextEntrants = parseEntrantsFromText(rememberedEntrants);
+        setEntrantsText(rememberedEntrants);
+        setPreviewSeededEntrants(nextEntrants);
+      }
+
       if (rememberedRoster?.trim()) {
         setRosterText(rememberedRoster);
       }
-      setIsRosterStorageReady(true);
+      setIsStorageReady(true);
     }, 0);
 
     return () => {
@@ -156,12 +222,14 @@ export function CreateBracketForm({
   }, [initialTemplate]);
 
   useEffect(() => {
-    if (!isRosterStorageReady) {
+    if (!isStorageReady) {
       return;
     }
 
+    window.localStorage.setItem(LAST_TITLE_STORAGE_KEY, title);
+    window.localStorage.setItem(LAST_ENTRANTS_STORAGE_KEY, entrantsText);
     window.localStorage.setItem(LAST_ROSTER_STORAGE_KEY, rosterText);
-  }, [isRosterStorageReady, rosterText]);
+  }, [entrantsText, isStorageReady, rosterText, title]);
 
   function updateEntrants(next: string[]) {
     setEntrantsText(next.join("\n"));
@@ -187,6 +255,17 @@ export function CreateBracketForm({
     setPreviewSeededEntrants(nextMode === "random" ? shufflePreview(entrants) : entrants);
   }
 
+  function handleRoundDateChange(value: string) {
+    const nextWindow = getRoundWindowForLocalDate(value);
+    setRoundDate(value);
+    if (!nextWindow) {
+      return;
+    }
+
+    setStartsAt(nextWindow.startsAt);
+    setEndsAt(nextWindow.endsAt);
+  }
+
   async function handleSubmit(formData: FormData) {
     setError(null);
     const payload = {
@@ -195,8 +274,8 @@ export function CreateBracketForm({
       rosterMembers,
       seededEntrants: previewSeededEntrants,
       seedingMode,
-      startsAt: new Date(String(formData.get("startsAt"))).toISOString(),
-      endsAt: new Date(String(formData.get("endsAt"))).toISOString(),
+      startsAt: new Date(startsAt).toISOString(),
+      endsAt: new Date(endsAt).toISOString(),
     };
 
     if (new Date(payload.endsAt).getTime() <= new Date(payload.startsAt).getTime()) {
@@ -227,6 +306,9 @@ export function CreateBracketForm({
         return;
       }
 
+      window.localStorage.setItem(LAST_TITLE_STORAGE_KEY, title);
+      window.localStorage.setItem(LAST_ENTRANTS_STORAGE_KEY, entrantsText);
+      window.localStorage.setItem(LAST_ROSTER_STORAGE_KEY, rosterText);
       router.push(result.adminUrl);
     });
   }
@@ -237,8 +319,9 @@ export function CreateBracketForm({
         <span className="eyebrow">Start A Bracket</span>
         <h2>Make the next office showdown in under ten minutes.</h2>
         <p className="muted">
-          Paste the entrants, set the round one start, and preview the full board before
-          anything goes live.
+          Paste the entrants, set the first round day, and preview the full board before
+          anything goes live. Each round runs from 6:00 AM to 8:00 PM, then the next
+          round opens the next day.
         </p>
         {initialTemplate?.sourceTitle ? (
           <p className="muted">Loaded from previous topic: {initialTemplate.sourceTitle}</p>
@@ -251,24 +334,16 @@ export function CreateBracketForm({
       </label>
 
       <label className="field">
-        <span>Round one opens</span>
+        <span>First round date</span>
         <input
-          type="datetime-local"
-          name="startsAt"
-          value={startsAt}
-          onChange={(event) => setStartsAt(event.target.value)}
+          type="date"
+          value={roundDate}
+          onChange={(event) => handleRoundDateChange(event.target.value)}
         />
+        <span className="muted">Round one opens at 6:00 AM and closes at 8:00 PM.</span>
       </label>
-
-      <label className="field">
-        <span>Round one closes</span>
-        <input
-          type="datetime-local"
-          name="endsAt"
-          value={endsAt}
-          onChange={(event) => setEndsAt(event.target.value)}
-        />
-      </label>
+      <input name="startsAt" type="hidden" value={startsAt} />
+      <input name="endsAt" type="hidden" value={endsAt} />
 
       <label className="field">
         <span>Entrants, one per line</span>
