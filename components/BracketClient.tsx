@@ -7,8 +7,9 @@ import {
   BracketSnapshotEntrant,
   BracketSnapshotMatchup,
 } from "@/lib/workquiz/types";
+import { CreateBracketForm } from "@/components/CreateBracketForm";
 
-type AdminSection = "live" | "roster" | "results" | "advance" | "links" | "history" | "danger";
+type AdminSection = "live" | "roster" | "results" | "advance" | "create" | "links" | "history" | "danger";
 
 const easternFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -95,7 +96,6 @@ export function BracketClient({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
-  const [pendingVotes, setPendingVotes] = useState<Record<string, string>>({});
   const [selectedRosterMemberId, setSelectedRosterMemberId] = useState<string | null>(
     initialSnapshot.selectedRosterMemberId ?? null,
   );
@@ -116,7 +116,6 @@ export function BracketClient({
     }
 
     setSnapshot(result);
-    setPendingVotes({});
   });
 
   useEffect(() => {
@@ -281,7 +280,6 @@ export function BracketClient({
 
   function handleRosterSelection(nextRosterMemberId: string | null) {
     setError(null);
-    setPendingVotes({});
     setSelectedRosterMemberId(nextRosterMemberId);
 
     if (mode === "public") {
@@ -311,11 +309,6 @@ export function BracketClient({
     }
 
     setSnapshot(result);
-    setPendingVotes((current) => {
-      const next = { ...current };
-      delete next[matchupId];
-      return next;
-    });
     setSelectedRosterMemberId(result.selectedRosterMemberId ?? selectedRosterMemberId);
   }
 
@@ -356,7 +349,6 @@ export function BracketClient({
     }
 
     setSnapshot(result);
-    setPendingVotes({});
   }
 
   async function shutDownNow() {
@@ -377,7 +369,6 @@ export function BracketClient({
     }
 
     setSnapshot(result);
-    setPendingVotes({});
   }
 
   async function clearVote(matchupId: string, rosterMemberId: string, rosterMemberName: string) {
@@ -421,12 +412,6 @@ export function BracketClient({
   }
 
   function renderPublicVote(matchup: BracketSnapshotMatchup) {
-    const selectedEntrantId = pendingVotes[matchup.id] ?? matchup.voteState.votedEntrantId;
-    const canSubmitVote =
-      matchup.voteState.canVote &&
-      !!selectedRosterMemberId &&
-      !!selectedEntrantId &&
-      selectedEntrantId !== matchup.voteState.votedEntrantId;
     const canSeeVoteCounts =
       matchup.status !== "live" ||
       !matchup.voteState.canVote ||
@@ -437,51 +422,37 @@ export function BracketClient({
     return (
       <section className="bw-vote-section" key={matchup.id}>
         <div className="bw-vote-prompt">
-          {matchup.voteState.votedEntrantId ? "Your vote is locked in" : "Pick your favourite"}
+          {!selectedRosterMemberId
+            ? "Pick your name first, then vote"
+            : matchup.voteState.votedEntrantId
+              ? "✓ Voted — here's how it's going"
+              : "Pick your favourite"}
         </div>
         <div className="bw-vote-cards">
           {[matchup.entrantA, matchup.entrantB].map((entrant, index) => {
-            const isSelected = selectedEntrantId === entrant?.id;
             const isVotedWinner = matchup.voteState.votedEntrantId === entrant?.id;
             const isVotedLoser = Boolean(matchup.voteState.votedEntrantId) && !isVotedWinner;
 
             return (
               <button
-                className={`bw-vote-card ${isSelected ? "is-selected" : ""} ${
-                  isVotedWinner ? "voted-win" : ""
-                } ${isVotedLoser ? "voted-lose" : ""}`}
-                disabled={!selectedRosterMemberId || !matchup.voteState.canVote || !entrant}
+                className={`bw-vote-card ${isVotedWinner ? "voted-win" : ""} ${
+                  isVotedLoser ? "voted-lose" : ""
+                }`}
+                disabled={!matchup.voteState.canVote || !entrant}
                 key={entrant?.id ?? index}
-                onClick={() =>
-                  entrant &&
-                  setPendingVotes((current) => ({
-                    ...current,
-                    [matchup.id]: entrant.id,
-                  }))
-                }
+                onClick={() => entrant && vote(matchup.id, entrant.id)}
                 type="button"
               >
                 <span className="bw-vote-card-check">✓</span>
                 <span className="bw-vote-card-name">{entrantLabel(entrant)}</span>
                 <span className="bw-vote-card-hint">
-                  {isSelected ? "Selected" : matchup.voteState.votedEntrantId ? "Vote recorded" : "Tap to select"}
+                  {matchup.voteState.votedEntrantId ? "" : "Tap to vote"}
                 </span>
               </button>
             );
           })}
           <div className="bw-vote-vs">VS</div>
         </div>
-
-        {matchup.voteState.canVote ? (
-          <button
-            className="bw-btn bw-btn-lime bw-confirm-vote vote-confirm-button"
-            disabled={!canSubmitVote}
-            onClick={() => selectedEntrantId && vote(matchup.id, selectedEntrantId)}
-            type="button"
-          >
-            {selectedEntrantId ? "Vote for selected option" : "Select an option to vote"}
-          </button>
-        ) : null}
 
         <div className={`bw-vote-results ${canSeeVoteCounts ? "show" : ""}`}>
           <div className="bw-result-row">
@@ -728,6 +699,16 @@ export function BracketClient({
       );
     }
 
+    if (adminSection === "create") {
+      return (
+        <section className="bw-section-panel active">
+          <div className="bw-panel-title">New Tournament</div>
+          <p className="bw-panel-sub">Set up a fresh bracket. Once created, share the player link.</p>
+          <CreateBracketForm variant="admin" />
+        </section>
+      );
+    }
+
     if (adminSection === "links") {
       return (
         <section className="bw-section-panel active">
@@ -921,9 +902,13 @@ export function BracketClient({
             >
               Live
             </button>
-            <a className="bw-nav-tab" href={createNewBracketHref}>
+            <button
+              className={`bw-nav-tab ${adminSection === "create" ? "active" : ""}`}
+              onClick={() => setAdminSection("create")}
+              type="button"
+            >
               + New Tournament
-            </a>
+            </button>
             <button
               className={`bw-nav-tab ${adminSection === "history" ? "active" : ""}`}
               onClick={() => setAdminSection("history")}
@@ -954,9 +939,13 @@ export function BracketClient({
               </button>
             ))}
             <div className="bw-sidebar-label">Setup</div>
-            <a className="bw-sidebar-link" href={createNewBracketHref}>
+            <button
+              className={`bw-sidebar-link ${adminSection === "create" ? "active" : ""}`}
+              onClick={() => setAdminSection("create")}
+              type="button"
+            >
               New Tournament
-            </a>
+            </button>
             <button
               className={`bw-sidebar-link ${adminSection === "history" ? "active" : ""}`}
               onClick={() => setAdminSection("history")}

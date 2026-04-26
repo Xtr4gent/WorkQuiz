@@ -92,6 +92,7 @@ function shufflePreview(items: string[]) {
 
 export function CreateBracketForm({
   initialTemplate,
+  variant = "setup",
 }: {
   initialTemplate?: {
     title: string;
@@ -100,6 +101,7 @@ export function CreateBracketForm({
     seedingMode: SeedingMode;
     sourceTitle?: string;
   } | null;
+  variant?: "setup" | "admin";
 }) {
   const router = useRouter();
   const defaultRoundStart = useMemo(() => getNextSixAmRoundStart(), []);
@@ -142,6 +144,10 @@ export function CreateBracketForm({
   }, [endsAt, entrants.length, rosterMembers, startsAt, title]);
 
   useEffect(() => {
+    if (variant === "admin") {
+      return;
+    }
+
     if (!previewIsValid) {
       return;
     }
@@ -189,7 +195,7 @@ export function CreateBracketForm({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [endsAt, entrants, previewIsValid, previewSeededEntrants, rosterMembers, seedingMode, startsAt, title]);
+  }, [endsAt, entrants, previewIsValid, previewSeededEntrants, rosterMembers, seedingMode, startsAt, title, variant]);
 
   useEffect(() => {
     if (initialTemplate) {
@@ -311,6 +317,149 @@ export function CreateBracketForm({
       window.localStorage.setItem(LAST_ROSTER_STORAGE_KEY, rosterText);
       router.push(result.adminUrl);
     });
+  }
+
+  if (variant === "admin") {
+    return (
+      <form action={handleSubmit} className="bw-create-form">
+        <div className="bw-card">
+          <div className="bw-card-title">Tournament Details</div>
+          <label className="bw-field">
+            <span>Topic</span>
+            <input
+              name="title"
+              placeholder="e.g. Best 90s Movie, Greatest Snack, Worst Meeting Habit..."
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <small>Keep it spicy. Boring topics get boring votes.</small>
+          </label>
+          <div className="bw-field-row">
+            <label className="bw-field">
+              <span>First round date</span>
+              <input
+                type="date"
+                value={roundDate}
+                onChange={(event) => handleRoundDateChange(event.target.value)}
+              />
+              <small>Round one opens at 6:00 AM and closes at 8:00 PM.</small>
+            </label>
+            <div className="bw-field">
+              <span>Seeding</span>
+              <div className="bw-seed-mode">
+                <button
+                  className={seedingMode === "manual" ? "bw-time-btn sel" : "bw-time-btn"}
+                  onClick={() => handleSeedingModeChange("manual")}
+                  type="button"
+                >
+                  Manual
+                </button>
+                <button
+                  className={seedingMode === "random" ? "bw-time-btn sel" : "bw-time-btn"}
+                  onClick={() => handleSeedingModeChange("random")}
+                  type="button"
+                >
+                  Random
+                </button>
+                {seedingMode === "random" ? (
+                  <button className="bw-time-btn" onClick={reshufflePreview} type="button">
+                    Reshuffle
+                  </button>
+                ) : null}
+              </div>
+              <small>Manual preserves list order. Random uses the preview order.</small>
+            </div>
+          </div>
+          <input name="startsAt" type="hidden" value={startsAt} />
+          <input name="endsAt" type="hidden" value={endsAt} />
+        </div>
+
+        <div className="bw-card">
+          <div className="bw-card-title">Contenders</div>
+          <label className="bw-field">
+            <span>Paste your list</span>
+            <textarea
+              placeholder="One per line"
+              rows={10}
+              value={entrantsText}
+              onChange={(event) => handleEntrantsTextChange(event.target.value)}
+            />
+            <small>
+              {entrants.length} contender{entrants.length === 1 ? "" : "s"} ready. Byes are handled automatically.
+            </small>
+          </label>
+          {entrants.length ? (
+            <div className="bw-contender-preview">
+              <span className="bw-card-label">Preview</span>
+              <div className="bw-contender-chips">
+                {entrants.slice(0, 32).map((entrant, index) => (
+                  <span className="bw-contender-chip" key={`${entrant}-${index}`}>
+                    {entrant}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {seedingMode === "manual" && entrants.length > 1 ? (
+          <div className="bw-card">
+            <div className="bw-card-title">Seed Preview</div>
+            <div className="bw-seed-list">
+              {entrants.map((entrant, index) => (
+                <div className="bw-seed-item" key={`${entrant}-${index}`}>
+                  <strong>#{index + 1}</strong>
+                  <span>{entrant}</span>
+                  <div className="bw-seed-actions">
+                    <button
+                      disabled={index === 0}
+                      onClick={() => updateEntrants(move(entrants, index, Math.max(0, index - 1)))}
+                      type="button"
+                    >
+                      Up
+                    </button>
+                    <button
+                      disabled={index === entrants.length - 1}
+                      onClick={() =>
+                        updateEntrants(move(entrants, index, Math.min(entrants.length - 1, index + 1)))
+                      }
+                      type="button"
+                    >
+                      Down
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="bw-card">
+          <div className="bw-card-title">Roster</div>
+          <label className="bw-field">
+            <span>Participants, one per line</span>
+            <textarea
+              placeholder={"Alex\nSam\nJordan\nTaylor"}
+              rows={8}
+              value={rosterText}
+              onChange={(event) => handleRosterTextChange(event.target.value)}
+            />
+            <small>These are the people who can vote. Only names on this list get a vote.</small>
+          </label>
+        </div>
+
+        {error ? <p className="bw-error-text">{error}</p> : null}
+
+        <div className="bw-btn-row">
+          <button className="bw-btn bw-btn-lime bw-launch-button" disabled={isPending} type="submit">
+            {isPending ? "Creating tournament..." : "Launch Tournament →"}
+          </button>
+          <button className="bw-btn bw-btn-outline" disabled title="Drafts are not wired yet." type="button">
+            Save as Draft
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (
