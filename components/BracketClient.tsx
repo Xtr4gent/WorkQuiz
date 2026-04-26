@@ -394,7 +394,7 @@ export function BracketClient({
   }
 
   return (
-    <div className="stack-lg">
+    <div className={`baw-app baw-app--${mode} stack-lg`}>
       {mode === "public" && !selectedRosterMemberId ? (
         <div className="identity-modal-backdrop" role="presentation">
           <section
@@ -404,8 +404,8 @@ export function BracketClient({
             role="dialog"
           >
             <div className="stack-sm">
-              <span className="eyebrow">Who Are You?</span>
-              <h2 id="identity-modal-title">Choose your name to enter the bracket.</h2>
+              <span className="eyebrow">Bored@Work</span>
+              <h2 id="identity-modal-title">Who are you?</h2>
               <p className="muted">
                 Pick your name once and we&apos;ll remember it on this browser next time.
               </p>
@@ -431,9 +431,19 @@ export function BracketClient({
       ) : null}
 
       {mode === "admin" ? (
+        <nav className="baw-topbar" aria-label="Admin">
+          <div className="baw-logo">
+            Bored<span>@Work</span>
+          </div>
+          <div className="baw-nav-topic">{snapshot.title}</div>
+          <span className="baw-admin-badge">Admin</span>
+        </nav>
+      ) : null}
+
+      {mode === "admin" ? (
         <section className="panel board-header">
           <div className="stack-sm">
-            <span className="eyebrow">Admin Control</span>
+            <span className="eyebrow">Bored@Work Admin</span>
             <h1>{snapshot.title}</h1>
             <p className="muted">
               {snapshot.status === "completed"
@@ -453,9 +463,24 @@ export function BracketClient({
           </div>
         </section>
       ) : (
-        <section className="public-summary-grid">
+        <>
+          <nav className="baw-topbar" aria-label="Tournament">
+            <div className="baw-logo">
+              Bored<span>@Work</span>
+            </div>
+            <div className="baw-nav-topic">{snapshot.title}</div>
+            <button
+              className="baw-identity-button"
+              onClick={() => handleRosterSelection(null)}
+              type="button"
+            >
+              <span className="baw-avatar">{selectedRosterMemberName?.slice(0, 1) ?? "?"}</span>
+              <span>{selectedRosterMemberName ?? "Choose name"}</span>
+            </button>
+          </nav>
+          <section className="public-summary-grid">
           <div className="panel public-vote-stat">
-            <span className="eyebrow">Participation</span>
+            <span className="eyebrow">Votes Cast</span>
             <strong>
               {snapshot.currentRoundUniqueVoters} / {snapshot.totalPlayers} voted
             </strong>
@@ -473,7 +498,8 @@ export function BracketClient({
               </button>
             </div>
           </div>
-        </section>
+          </section>
+        </>
       )}
 
       <section className="panel status-banner">
@@ -484,6 +510,27 @@ export function BracketClient({
           {mode === "admin" ? <p className="muted">All times shown in Eastern Time.</p> : null}
         </div>
       </section>
+
+      {mode === "admin" ? (
+        <section className="panel stack-sm">
+          <div className="inline-row">
+            <h2>Who&apos;s voted</h2>
+            <span className="muted">Only admins can see roster-level voting status.</span>
+          </div>
+          <div className="roster-board">
+            {snapshot.currentRoundRosterStatuses.map((member) => (
+              <div
+                className={`roster-chip ${member.hasVoted ? "voted" : "pending"}`}
+                key={member.rosterMemberId}
+              >
+                <span className="roster-chip-avatar">{member.name.slice(0, 1).toUpperCase()}</span>
+                <span>{member.name}</span>
+                <strong>{member.hasVoted ? "Voted" : "Pending"}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {mode === "admin" ? (
         <section className="panel stack-sm">
@@ -578,27 +625,6 @@ export function BracketClient({
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {mode === "public" ? (
-        <section className="panel stack-sm">
-          <div className="inline-row">
-            <h2>Voted?</h2>
-            <span className="muted">Green means done for this round. Red means still pending.</span>
-          </div>
-          <div className="roster-board">
-            {snapshot.currentRoundRosterStatuses.map((member) => (
-              <div
-                className={`roster-chip ${member.hasVoted ? "voted" : "pending"} ${
-                  member.rosterMemberId === selectedRosterMemberId ? "current-person" : ""
-                }`}
-                key={member.rosterMemberId}
-              >
-                <span>{member.name}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <section className="round-grid">
         {snapshot.rounds.map((round) => (
           <article className={`round-panel ${currentRound?.id === round.id ? "current" : ""}`} key={round.id}>
@@ -624,6 +650,11 @@ export function BracketClient({
                   !!selectedRosterMemberId &&
                   !!selectedEntrantId &&
                   selectedEntrantId !== matchup.voteState.votedEntrantId;
+                const canSeeVoteCounts =
+                  mode === "admin" ||
+                  matchup.status !== "live" ||
+                  !matchup.voteState.canVote ||
+                  Boolean(matchup.voteState.votedEntrantId);
                 return (
                   <div className="matchup-card" key={matchup.id}>
                     <button
@@ -643,7 +674,7 @@ export function BracketClient({
                       <span>
                         {matchup.entrantA ? `#${matchup.entrantA.seed} ${matchup.entrantA.name}` : "BYE"}
                       </span>
-                      <strong>{matchup.votesA}</strong>
+                      {canSeeVoteCounts ? <strong>{matchup.votesA}</strong> : null}
                     </button>
                     <button
                       className={`entrant-button ${winnerB ? "winner" : ""} ${
@@ -662,7 +693,7 @@ export function BracketClient({
                       <span>
                         {matchup.entrantB ? `#${matchup.entrantB.seed} ${matchup.entrantB.name}` : "BYE"}
                       </span>
-                      <strong>{matchup.votesB}</strong>
+                      {canSeeVoteCounts ? <strong>{matchup.votesB}</strong> : null}
                     </button>
 
                     {mode === "public" && matchup.voteState.canVote ? (
@@ -681,7 +712,11 @@ export function BracketClient({
                     ) : null}
 
                     <div className="matchup-meta">
-                      <span>{matchup.totalVotes} total votes</span>
+                      <span>
+                        {canSeeVoteCounts
+                          ? `${matchup.totalVotes} total votes`
+                          : "Results unlock after you vote"}
+                      </span>
                       {matchup.voteState.votedEntrantId ? <span>Your vote is locked in</span> : null}
                     </div>
 
