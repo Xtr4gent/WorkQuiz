@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, Instrument_Sans } from "next/font/google";
+import { DM_Sans, Syne } from "next/font/google";
 import "./globals.css";
 
-const display = Barlow_Condensed({
+const display = Syne({
   variable: "--font-display",
-  weight: ["400", "600", "700"],
+  weight: ["700", "800"],
   subsets: ["latin"],
 });
 
-const body = Instrument_Sans({
+const body = DM_Sans({
   variable: "--font-body",
   subsets: ["latin"],
 });
