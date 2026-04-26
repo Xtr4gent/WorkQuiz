@@ -695,10 +695,10 @@ export function buildSnapshot(
     status: bracket.status,
     isCurrentPublic: bracket.isCurrentPublic,
     publicToken: bracket.publicToken,
-    publicUrl: `/b/${bracket.publicToken}`,
+    publicUrl: "/voting",
     adminUrl:
       options?.includeAdminUrl && options.adminToken
-        ? `/admin/${options.adminToken}`
+        ? `/admin?adminToken=${encodeURIComponent(options.adminToken)}`
         : undefined,
     seedingMode: bracket.seedingMode,
     createdAt: bracket.createdAt,

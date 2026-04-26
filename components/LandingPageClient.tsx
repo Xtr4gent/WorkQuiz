@@ -88,7 +88,7 @@ export default function LandingPageClient({
           {isLive ? (
             <>
               Tournament is live right now —{" "}
-              <Link href="/current" className="live-strip__link">
+              <Link href="/voting" className="live-strip__link">
                 join the vote →
               </Link>
             </>
@@ -112,7 +112,7 @@ export default function LandingPageClient({
           </p>
           <div className="lp-hero__cta">
             <Link
-              href="/current"
+              href="/voting"
               className={`primary-button lp-cta-main ${isLive ? "" : "lp-cta-dim"}`}
             >
               {isLive ? "Cast Your Vote →" : "View Current Tournament →"}
@@ -265,24 +265,24 @@ export default function LandingPageClient({
           <h2 className="lp-cta-panel__h2">Your vote awaits.</h2>
           <p className="muted lp-cta-panel__sub">Takes 10 seconds. Arguments last all week.</p>
           <div className="lp-cta-panel__actions">
-            <Link href="/current" className="primary-button">
+            <Link href="/voting" className="primary-button">
               {isLive ? "Cast Your Vote →" : "View Tournament →"}
             </Link>
-            <Link href="/setup" className="pill">
+            <Link href="/admin" className="pill">
               Admin Setup →
             </Link>
           </div>
-          <p className="muted lp-cta-panel__link">quiz.hamiltons.cloud/current</p>
+          <p className="muted lp-cta-panel__link">quiz.hamiltons.cloud/voting</p>
         </div>
       </section>
 
       <footer className="lp-footer shell">
         <span className="muted">© {new Date().getFullYear()} Bored@Work</span>
         <div className="lp-footer__links">
-          <Link href="/current" className="muted lp-footer__link">
+          <Link href="/voting" className="muted lp-footer__link">
             Player link
           </Link>
-          <Link href="/setup" className="muted lp-footer__link">
+          <Link href="/admin" className="muted lp-footer__link">
             Admin
           </Link>
         </div>

@@ -520,11 +520,11 @@ test("admin auth session token matches the configured env credentials", async ()
 });
 
 test("sanitizeAdminRedirectTarget only allows safe in-app page routes", () => {
-  assert.equal(sanitizeAdminRedirectTarget("/setup"), "/setup");
+  assert.equal(sanitizeAdminRedirectTarget("/admin"), "/admin");
   assert.equal(sanitizeAdminRedirectTarget("/admin/token-123?tab=votes"), "/admin/token-123?tab=votes");
-  assert.equal(sanitizeAdminRedirectTarget("https://evil.example/steal"), "/setup");
-  assert.equal(sanitizeAdminRedirectTarget("//evil.example/steal"), "/setup");
-  assert.equal(sanitizeAdminRedirectTarget("/api/admin/secret"), "/setup");
+  assert.equal(sanitizeAdminRedirectTarget("https://evil.example/steal"), "/admin");
+  assert.equal(sanitizeAdminRedirectTarget("//evil.example/steal"), "/admin");
+  assert.equal(sanitizeAdminRedirectTarget("/api/admin/secret"), "/admin");
 });
 
 test("status route reports live state separately from current bracket presence", async () => {
@@ -548,8 +548,8 @@ test("status route reports live state separately from current bracket presence",
   assert.equal(body.live, true);
   assert.equal(body.hasCurrentBracket, true);
   assert.equal(body.currentTitle, "Best Chocolate Bar");
-  assert.equal(body.currentUrl, "/current");
-  assert.equal(body.adminUrl, "/admin-login");
+  assert.equal(body.currentUrl, "/voting");
+  assert.equal(body.adminUrl, "/admin");
 
   const store = readStore();
   const storedBracket = store.brackets.find((entry) => entry.id === bracket.id)!;

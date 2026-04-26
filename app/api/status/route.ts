@@ -26,8 +26,8 @@ export async function GET() {
       live,
       hasCurrentBracket: bracket !== null,
       currentTitle: bracket?.title ?? null,
-      currentUrl: "/current",
-      adminUrl: "/admin-login",
+      currentUrl: "/voting",
+      adminUrl: "/admin",
       history: history.length > 0 ? history : DEFAULT_LANDING_HISTORY,
     },
     {

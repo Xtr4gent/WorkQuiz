@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 
 const ADMIN_SESSION_COOKIE = "workquiz_admin_session";
 const ADMIN_LOGIN_PATH = "/admin-login";
-const DEFAULT_ADMIN_REDIRECT = "/setup";
+const DEFAULT_ADMIN_REDIRECT = "/admin";
 
 type AdminSignInResult =
   | { ok: true }

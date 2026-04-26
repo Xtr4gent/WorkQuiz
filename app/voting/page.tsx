@@ -1,0 +1,45 @@
+import Link from "next/link";
+
+import { BracketClient } from "@/components/BracketClient";
+import { getRememberedRosterMemberId } from "@/lib/workquiz/auth";
+import { buildSnapshot, findCurrentPublicBracket } from "@/lib/workquiz/bracket";
+
+export const dynamic = "force-dynamic";
+
+export default async function VotingPage() {
+  const bracket = findCurrentPublicBracket();
+
+  if (!bracket) {
+    return (
+      <main className="bw-vote-app">
+        <nav className="bw-public-nav" aria-label="Tournament">
+          <div className="bw-nav-logo">
+            Bored<span>@Work</span>
+          </div>
+          <div className="bw-nav-topic">No live tournament</div>
+          <Link className="bw-nav-identity" href="/">
+            Back home
+          </Link>
+        </nav>
+
+        <section className="bw-page">
+          <header className="bw-topic-header">
+            <div className="bw-topic-round-badge">No Live Tournament</div>
+            <h1 className="bw-topic-title">No tournament is live right now.</h1>
+            <p className="bw-topic-meta">
+              Check back when the next bracket is marked as the current public tournament.
+            </p>
+          </header>
+        </section>
+      </main>
+    );
+  }
+
+  const rememberedRosterMemberId = await getRememberedRosterMemberId();
+  const rosterMemberId = bracket.rosterMembers.some((member) => member.id === rememberedRosterMemberId)
+    ? rememberedRosterMemberId ?? undefined
+    : undefined;
+  const snapshot = buildSnapshot(bracket, { rosterMemberId });
+
+  return <BracketClient initialSnapshot={snapshot} mode="public" token={bracket.publicToken} />;
+}

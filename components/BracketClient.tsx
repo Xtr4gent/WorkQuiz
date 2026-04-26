@@ -210,10 +210,10 @@ export function BracketClient({
 
   const displayCurrentUrl = useMemo(() => {
     if (!hydrated) {
-      return "/current";
+      return "/voting";
     }
 
-    return new URL("/current", window.location.origin).toString();
+    return new URL("/voting", window.location.origin).toString();
   }, [hydrated]);
 
   const reuseTemplateBase = useMemo(() => {
@@ -221,7 +221,7 @@ export function BracketClient({
       return null;
     }
 
-    return `/setup?adminToken=${encodeURIComponent(adminToken)}`;
+    return `/admin?adminToken=${encodeURIComponent(adminToken)}`;
   }, [adminToken]);
 
   const currentRoundBanner = useMemo(() => {
@@ -268,7 +268,7 @@ export function BracketClient({
   );
 
   const createNewBracketHref = useMemo(
-    () => (adminToken ? `/setup?adminToken=${encodeURIComponent(adminToken)}` : "/setup"),
+    () => (adminToken ? `/admin?adminToken=${encodeURIComponent(adminToken)}` : "/admin"),
     [adminToken],
   );
 
@@ -733,7 +733,7 @@ export function BracketClient({
             <div className="bw-link-stack">
               <div>
                 <span>Stable public link</span>
-                <code>{snapshot.isCurrentPublic ? displayCurrentUrl : "/current (not active yet)"}</code>
+                <code>{snapshot.isCurrentPublic ? displayCurrentUrl : "/voting (not active yet)"}</code>
               </div>
               <div>
                 <span>Public voting link</span>

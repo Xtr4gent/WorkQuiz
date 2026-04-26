@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { bracket, adminToken } = createBracket({
+  const { adminToken } = createBracket({
     title: body.title.trim(),
     entrants,
     rosterMembers,
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
-    publicUrl: `/b/${bracket.publicToken}`,
-    adminUrl: `/admin/${adminToken}`,
+    publicUrl: "/voting",
+    adminUrl: `/admin?adminToken=${encodeURIComponent(adminToken)}`,
   });
 }
