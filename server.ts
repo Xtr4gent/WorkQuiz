@@ -10,12 +10,14 @@ const port = Number(process.env.PORT ?? 3000);
 const dev = process.env.NODE_ENV !== "production";
 
 async function main() {
+  const server = http.createServer();
   const app = next({ dev, hostname: "0.0.0.0", port });
   const handle = app.getRequestHandler();
 
   await app.prepare();
+  const handleUpgrade = app.getUpgradeHandler();
 
-  const server = http.createServer((request, response) => {
+  server.on("request", (request, response) => {
     const parsed = parse(request.url ?? "", true);
     handle(request, response, parsed).catch((error) => {
       response.statusCode = 500;
@@ -30,7 +32,15 @@ async function main() {
     const { pathname, query } = parse(request.url ?? "", true);
     const token = typeof query.token === "string" ? query.token : null;
 
-    if (pathname !== "/ws" || !token) {
+    if (pathname !== "/ws") {
+      void handleUpgrade(request, socket, head).catch((error) => {
+        console.error(error);
+        socket.destroy();
+      });
+      return;
+    }
+
+    if (!token) {
       socket.destroy();
       return;
     }

@@ -82,6 +82,11 @@ function resultWidth(votes: number, total: number) {
   return `${percent(votes, total)}%`;
 }
 
+function resultBarClassName(votes: number, otherVotes: number, totalVotes: number, baseClassName: string) {
+  const isLeader = totalVotes > 0 && votes >= otherVotes;
+  return isLeader ? baseClassName : `${baseClassName} losing`;
+}
+
 export function BracketClient({
   token,
   adminToken,
@@ -98,6 +103,9 @@ export function BracketClient({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [selectedRosterMemberId, setSelectedRosterMemberId] = useState<string | null>(
     initialSnapshot.selectedRosterMemberId ?? null,
+  );
+  const [identityPickerOpen, setIdentityPickerOpen] = useState(
+    mode === "public" && !initialSnapshot.selectedRosterMemberId,
   );
   const [adminSection, setAdminSection] = useState<AdminSection>("live");
   const hydrated = useHydrated();
@@ -281,6 +289,7 @@ export function BracketClient({
   function handleRosterSelection(nextRosterMemberId: string | null) {
     setError(null);
     setSelectedRosterMemberId(nextRosterMemberId);
+    setIdentityPickerOpen(mode === "public" && !nextRosterMemberId);
 
     if (mode === "public") {
       void fetch(`/api/brackets/${token}/identity`, {
@@ -418,6 +427,18 @@ export function BracketClient({
       Boolean(matchup.voteState.votedEntrantId);
     const votePctA = percent(matchup.votesA, matchup.totalVotes);
     const votePctB = percent(matchup.votesB, matchup.totalVotes);
+    const resultBarAClassName = resultBarClassName(
+      matchup.votesA,
+      matchup.votesB,
+      matchup.totalVotes,
+      "bw-result-bar-fill",
+    );
+    const resultBarBClassName = resultBarClassName(
+      matchup.votesB,
+      matchup.votesA,
+      matchup.totalVotes,
+      "bw-result-bar-fill",
+    );
 
     return (
       <section className="bw-vote-section" key={matchup.id}>
@@ -464,7 +485,7 @@ export function BracketClient({
               </div>
             </div>
             <div className="bw-result-bar-track">
-              <div className="bw-result-bar-fill" style={{ width: `${votePctA}%` }} />
+              <div className={resultBarAClassName} style={{ width: `${votePctA}%` }} />
             </div>
           </div>
           <div className="bw-result-row">
@@ -476,7 +497,7 @@ export function BracketClient({
               </div>
             </div>
             <div className="bw-result-bar-track">
-              <div className="bw-result-bar-fill losing" style={{ width: `${votePctB}%` }} />
+              <div className={resultBarBClassName} style={{ width: `${votePctB}%` }} />
             </div>
           </div>
           <div className="bw-result-total">{matchup.totalVotes} total votes</div>
@@ -548,6 +569,18 @@ export function BracketClient({
   function renderResultBars(matchup: BracketSnapshotMatchup) {
     const aPct = percent(matchup.votesA, matchup.totalVotes);
     const bPct = percent(matchup.votesB, matchup.totalVotes);
+    const resultBarAClassName = resultBarClassName(
+      matchup.votesA,
+      matchup.votesB,
+      matchup.totalVotes,
+      "bw-bar-fill",
+    );
+    const resultBarBClassName = resultBarClassName(
+      matchup.votesB,
+      matchup.votesA,
+      matchup.totalVotes,
+      "bw-bar-fill",
+    );
 
     return (
       <>
@@ -560,7 +593,7 @@ export function BracketClient({
             </div>
           </div>
           <div className="bw-bar-track">
-            <div className="bw-bar-fill" style={{ width: resultWidth(matchup.votesA, matchup.totalVotes) }} />
+            <div className={resultBarAClassName} style={{ width: resultWidth(matchup.votesA, matchup.totalVotes) }} />
           </div>
         </div>
         <div className="bw-matchup-result">
@@ -572,7 +605,7 @@ export function BracketClient({
             </div>
           </div>
           <div className="bw-bar-track">
-            <div className="bw-bar-fill losing" style={{ width: resultWidth(matchup.votesB, matchup.totalVotes) }} />
+            <div className={resultBarBClassName} style={{ width: resultWidth(matchup.votesB, matchup.totalVotes) }} />
           </div>
         </div>
       </>
@@ -973,7 +1006,7 @@ export function BracketClient({
 
   return (
     <div className="bw-vote-app">
-      {mode === "public" && !selectedRosterMemberId ? (
+      {mode === "public" && identityPickerOpen ? (
         <div className="bw-modal-backdrop" role="presentation">
           <section
             aria-labelledby="identity-modal-title"
@@ -1007,7 +1040,7 @@ export function BracketClient({
           Bored<span>@Work</span>
         </div>
         <div className="bw-nav-topic">{snapshot.title}</div>
-        <button className="bw-nav-identity" onClick={() => handleRosterSelection(null)} type="button">
+        <button className="bw-nav-identity" onClick={() => setIdentityPickerOpen(true)} type="button">
           <span className="bw-nav-avatar">{selectedRosterMemberName?.slice(0, 1) ?? "?"}</span>
           <span>{selectedRosterMemberName ?? "Choose name"}</span>
         </button>
