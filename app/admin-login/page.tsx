@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import {
-  ADMIN_AUTH,
   buildAdminLoginRedirect,
   isAdminAuthenticated,
   isAdminAuthConfigured,
@@ -96,9 +95,6 @@ export default async function AdminLoginPage({
           </div>
         )}
 
-        <p className="muted admin-login-footnote">
-          Admin login lives at <code>{ADMIN_AUTH.loginPath}</code>.
-        </p>
       </section>
     </main>
   );

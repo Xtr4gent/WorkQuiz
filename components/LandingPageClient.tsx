@@ -282,7 +282,6 @@ export default function LandingPageClient({
               Admin Setup →
             </Link>
           </div>
-          <p className="muted lp-cta-panel__link">quiz.hamiltons.cloud/voting</p>
         </div>
       </section>
 
