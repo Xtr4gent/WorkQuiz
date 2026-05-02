@@ -76,10 +76,18 @@ function winnerNameForBracket(bracket: BracketRecord) {
   return bracket.entrants.find((entrant) => entrant.id === winnerEntrantId)?.name ?? null;
 }
 
+function bracketKind(bracket: BracketRecord) {
+  return bracket.kind ?? "public";
+}
+
 async function buildAdminHistory(): Promise<AdminHistoryItem[]> {
   return (await readStore())
     .brackets
     .map((bracket) => {
+      if (bracketKind(bracket) === "test") {
+        return null;
+      }
+
       const winnerName = winnerNameForBracket(bracket);
       if (!winnerName) {
         return null;
@@ -274,6 +282,7 @@ export async function createBracket(input: CreateBracketInput) {
   const adminToken = nanoid(32);
   const bracket: BracketRecord = {
     id: nanoid(),
+    kind: input.kind ?? "public",
     title: input.title.trim(),
     slug: slugify(input.title) || `bracket-${nanoid(6)}`,
     status: "live",
@@ -292,6 +301,17 @@ export async function createBracket(input: CreateBracketInput) {
   };
 
   bracket.rounds = buildRoundsForBracket(bracket, input.startsAt, roundDurationHours, input.endsAt);
+  if (bracketKind(bracket) === "test") {
+    const firstRound = bracket.rounds[0];
+    if (firstRound?.status === "upcoming") {
+      firstRound.status = "live";
+      for (const matchup of firstRound.matchups) {
+        if (matchup.entrantAId && matchup.entrantBId && matchup.status === "pending") {
+          matchup.status = "live";
+        }
+      }
+    }
+  }
 
   await updateStore((store) => ({
     ...store,
@@ -409,7 +429,7 @@ export async function advanceReadyBrackets(now = new Date()) {
   let changed = false;
 
   for (const bracket of store.brackets) {
-    if (bracket.status === "disabled") {
+    if (bracket.status === "disabled" || bracketKind(bracket) === "test") {
       continue;
     }
 
@@ -435,7 +455,12 @@ export async function findBracketByPublicToken(publicToken: string) {
 
 export async function findCurrentPublicBracket() {
   return (
-    (await readStore()).brackets.find((bracket) => bracket.isCurrentPublic && bracket.status !== "disabled") ?? null
+    (await readStore()).brackets.find(
+      (bracket) =>
+        bracketKind(bracket) === "public" &&
+        bracket.isCurrentPublic &&
+        bracket.status !== "disabled",
+    ) ?? null
   );
 }
 
@@ -542,6 +567,10 @@ export async function markBracketAsCurrentPublic(adminToken: string) {
 
     if (target.status === "disabled") {
       throw new Error("Disabled brackets cannot be marked current.");
+    }
+
+    if (bracketKind(target) === "test") {
+      throw new Error("Test brackets cannot be marked current public.");
     }
 
     for (const bracket of store.brackets) {
@@ -685,6 +714,7 @@ export function buildSnapshot(
   if (bracket.status !== "disabled") {
     advanceBracket(bracket, new Date());
   }
+  const kind = bracketKind(bracket);
   const entrants = entrantMap(bracket);
   const rosterMap = new Map(bracket.rosterMembers.map((member) => [member.id, member]));
   const currentRoundRecord =
@@ -760,12 +790,16 @@ export function buildSnapshot(
 
   return {
     id: bracket.id,
+    kind: bracketKind(bracket),
     title: bracket.title,
     slug: bracket.slug,
     status: bracket.status,
     isCurrentPublic: bracket.isCurrentPublic,
     publicToken: bracket.publicToken,
-    publicUrl: "/voting",
+    publicUrl:
+      kind === "test" && options?.adminToken
+        ? `/test?adminToken=${encodeURIComponent(options.adminToken)}`
+        : "/voting",
     adminUrl:
       options?.includeAdminUrl && options.adminToken
         ? `/admin?adminToken=${encodeURIComponent(options.adminToken)}`
@@ -809,6 +843,7 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
         : normalizedEntrants;
   const previewBracket: BracketRecord = {
     id: `preview-${nanoid(8)}`,
+    kind: input.kind ?? "public",
     title: input.title.trim(),
     slug: slugify(input.title) || `preview-${nanoid(4)}`,
     status: "live",

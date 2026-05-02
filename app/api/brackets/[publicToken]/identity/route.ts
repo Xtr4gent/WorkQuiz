@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isAdminAuthenticated } from "@/lib/workquiz/admin-auth";
 import { setRememberedRosterMemberId } from "@/lib/workquiz/auth";
 import { findBracketByPublicToken } from "@/lib/workquiz/bracket";
 
@@ -11,6 +12,10 @@ export async function POST(
   const bracket = await findBracketByPublicToken(publicToken);
 
   if (!bracket) {
+    return NextResponse.json({ error: "Bracket not found." }, { status: 404 });
+  }
+
+  if ((bracket.kind ?? "public") === "test" && !(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Bracket not found." }, { status: 404 });
   }
 

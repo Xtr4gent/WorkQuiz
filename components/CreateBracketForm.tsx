@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import type { BracketSnapshot, EntrantInput, SeedingMode } from "@/lib/workquiz/types";
+import type { BracketKind, BracketSnapshot, EntrantInput, SeedingMode } from "@/lib/workquiz/types";
 import { parseContendersFromText, parseEntrantsFromText } from "@/lib/workquiz/utils";
 
 const LAST_ROSTER_STORAGE_KEY = "workquiz:last-admin-roster";
@@ -309,8 +309,10 @@ export function CreateBracketForm({
 
   async function handleSubmit(formData: FormData) {
     setError(null);
+    const kind: BracketKind = formData.get("kind") === "test" ? "test" : "public";
     const payload = {
       title: String(formData.get("title") ?? ""),
+      kind,
       entrants,
       rosterMembers,
       seededEntrants: previewSeededEntrants,
@@ -489,11 +491,17 @@ export function CreateBracketForm({
         {error ? <p className="bw-error-text">{error}</p> : null}
 
         <div className="bw-btn-row">
-          <button className="bw-btn bw-btn-lime bw-launch-button" disabled={isPending} type="submit">
+          <button
+            className="bw-btn bw-btn-lime bw-launch-button"
+            disabled={isPending}
+            name="kind"
+            type="submit"
+            value="public"
+          >
             {isPending ? "Creating tournament..." : "Launch Tournament →"}
           </button>
-          <button className="bw-btn bw-btn-outline" disabled title="Drafts are not wired yet." type="button">
-            Save as Draft
+          <button className="bw-btn bw-btn-outline" disabled={isPending} name="kind" type="submit" value="test">
+            {isPending ? "Creating test..." : "Create Test Bracket"}
           </button>
         </div>
       </form>
@@ -672,7 +680,7 @@ export function CreateBracketForm({
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      <button className="primary-button" disabled={isPending} type="submit">
+      <button className="primary-button" disabled={isPending} name="kind" type="submit" value="public">
         {isPending ? "Creating bracket..." : "Create bracket"}
       </button>
     </form>

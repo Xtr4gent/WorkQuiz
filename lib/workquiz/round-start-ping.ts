@@ -55,7 +55,7 @@ async function claimPendingRoundStartPings() {
 
   await updateStore((store) => {
     for (const bracket of store.brackets) {
-      if (!bracket.isCurrentPublic || bracket.status === "disabled") {
+      if ((bracket.kind ?? "public") === "test" || !bracket.isCurrentPublic || bracket.status === "disabled") {
         continue;
       }
 

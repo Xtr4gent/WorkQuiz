@@ -1,0 +1,50 @@
+import Link from "next/link";
+
+import { BracketClient } from "@/components/BracketClient";
+import { getRememberedRosterMemberId } from "@/lib/workquiz/auth";
+import { buildSnapshot, findBracketByAdminToken } from "@/lib/workquiz/bracket";
+
+export const dynamic = "force-dynamic";
+
+export default async function TestVotingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ adminToken?: string }>;
+}) {
+  const { adminToken } = await searchParams;
+  const bracket = adminToken ? await findBracketByAdminToken(adminToken) : null;
+
+  if (!adminToken || !bracket || (bracket.kind ?? "public") !== "test") {
+    return (
+      <main className="bw-vote-app">
+        <nav className="bw-public-nav" aria-label="Test tournament">
+          <div className="bw-nav-logo">
+            Bored<span>@Work</span>
+          </div>
+          <div className="bw-nav-topic">Test Mode</div>
+          <Link className="bw-nav-identity" href="/admin">
+            Back to admin
+          </Link>
+        </nav>
+
+        <section className="bw-page">
+          <header className="bw-topic-header">
+            <div className="bw-topic-round-badge">Admin Test Area</div>
+            <h1 className="bw-topic-title">Choose a test bracket from the admin portal.</h1>
+            <p className="bw-topic-meta">
+              Test brackets are private, never public, and never appear in Past Tournaments.
+            </p>
+          </header>
+        </section>
+      </main>
+    );
+  }
+
+  const rememberedRosterMemberId = await getRememberedRosterMemberId();
+  const rosterMemberId = bracket.rosterMembers.some((member) => member.id === rememberedRosterMemberId)
+    ? rememberedRosterMemberId ?? undefined
+    : undefined;
+  const snapshot = buildSnapshot(bracket, { rosterMemberId, adminToken });
+
+  return <BracketClient initialSnapshot={snapshot} mode="public" token={bracket.publicToken} />;
+}

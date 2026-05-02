@@ -1,4 +1,5 @@
 export type SeedingMode = "manual" | "random";
+export type BracketKind = "public" | "test";
 export type BracketStatus = "draft" | "live" | "completed" | "disabled";
 export type RoundStatus = "upcoming" | "live" | "tiebreaker" | "closed";
 export type MatchupStatus = "pending" | "live" | "needs_tiebreaker" | "closed";
@@ -54,6 +55,7 @@ export interface RoundRecord {
 
 export interface BracketRecord {
   id: string;
+  kind?: BracketKind;
   title: string;
   slug: string;
   status: BracketStatus;
@@ -77,6 +79,7 @@ export interface StoreShape {
 
 export interface CreateBracketInput {
   title: string;
+  kind?: BracketKind;
   seedingMode: SeedingMode;
   entrants: EntrantInput[];
   rosterMembers: string[];
@@ -156,6 +159,7 @@ export interface BracketSnapshotRound {
 
 export interface BracketSnapshot {
   id: string;
+  kind: BracketKind;
   title: string;
   slug: string;
   status: BracketStatus;

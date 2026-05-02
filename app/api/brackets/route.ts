@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 
 import { createBracket } from "@/lib/workquiz/bracket";
 import { DEFAULT_ROUND_DURATION_HOURS } from "@/lib/workquiz/constants";
-import type { EntrantInput } from "@/lib/workquiz/types";
+import type { BracketKind, EntrantInput } from "@/lib/workquiz/types";
 import { normalizeContenderInputs, parseContendersFromText } from "@/lib/workquiz/utils";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     title?: string;
+    kind?: BracketKind;
     entrants?: EntrantInput[];
     rosterMembers?: string[];
     seededEntrants?: EntrantInput[];
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
 
   const { adminToken } = await createBracket({
     title: body.title.trim(),
+    kind: body.kind === "test" ? "test" : "public",
     entrants,
     rosterMembers,
     seededEntrants,
@@ -81,5 +83,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     publicUrl: "/voting",
     adminUrl: `/admin?adminToken=${encodeURIComponent(adminToken)}`,
+    testUrl: `/test?adminToken=${encodeURIComponent(adminToken)}`,
   });
 }

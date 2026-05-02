@@ -238,6 +238,14 @@ export function BracketClient({
 
     return new URL("/voting", window.location.origin).toString();
   }, [hydrated]);
+  const displayTestUrl = useMemo(() => {
+    if (!adminToken) {
+      return null;
+    }
+
+    const href = `/test?adminToken=${encodeURIComponent(adminToken)}`;
+    return hydrated ? new URL(href, window.location.origin).toString() : href;
+  }, [adminToken, hydrated]);
 
   const reuseTemplateBase = useMemo(() => {
     if (!adminToken) {
@@ -309,6 +317,7 @@ export function BracketClient({
   const turnout = percent(snapshot.currentRoundUniqueVoters, snapshot.totalPlayers);
   const pendingRosterCount = Math.max(snapshot.totalPlayers - snapshot.currentRoundUniqueVoters, 0);
   const champion = winnerName(snapshot);
+  const isTestBracket = snapshot.kind === "test";
 
   function handleRosterSelection(nextRosterMemberId: string | null) {
     setError(null);
@@ -389,7 +398,10 @@ export function BracketClient({
       return;
     }
 
-    if (!window.confirm("Are you sure you want to shut down this bracket and disable the public link?")) {
+    const confirmation = isTestBracket
+      ? "Discard this test bracket? It will stay out of public voting and Past Tournaments."
+      : "Are you sure you want to shut down this bracket and disable the public link?";
+    if (!window.confirm(confirmation)) {
       return;
     }
 
@@ -842,19 +854,28 @@ export function BracketClient({
     if (adminSection === "links") {
       return (
         <section className="bw-section-panel active">
-          <div className="bw-panel-title">Tournament Links</div>
-          <p className="bw-panel-sub">Current public link, private admin link, and public status controls.</p>
+          <div className="bw-panel-title">{isTestBracket ? "Test Bracket Links" : "Tournament Links"}</div>
+          <p className="bw-panel-sub">
+            {isTestBracket
+              ? "Private test voting, admin access, and discard controls."
+              : "Current public link, private admin link, and public status controls."}
+          </p>
           <div className="bw-card">
             <div className="bw-btn-row">
-              {!snapshot.isCurrentPublic && snapshot.status !== "disabled" ? (
+              {!isTestBracket && !snapshot.isCurrentPublic && snapshot.status !== "disabled" ? (
                 <button className="bw-btn bw-btn-lime" onClick={makeCurrentPublicNow} type="button">
                   Make Current Public Bracket
                 </button>
               ) : null}
               {snapshot.status !== "disabled" ? (
                 <button className="bw-btn bw-btn-danger" onClick={shutDownNow} type="button">
-                  Shut Down Public Link
+                  {isTestBracket ? "Discard Test Bracket" : "Shut Down Public Link"}
                 </button>
+              ) : null}
+              {isTestBracket && displayTestUrl ? (
+                <a className="bw-btn bw-btn-lime" href={displayTestUrl}>
+                  Open Test Voting
+                </a>
               ) : null}
               <a className="bw-btn bw-btn-outline" href={createNewBracketHref}>
                 New Tournament
@@ -862,13 +883,26 @@ export function BracketClient({
             </div>
             <div className="bw-link-stack">
               <div>
-                <span>Stable public link</span>
-                <code>{snapshot.isCurrentPublic ? displayCurrentUrl : "/voting (not active yet)"}</code>
+                <span>{isTestBracket ? "Public status" : "Stable public link"}</span>
+                <code>
+                  {isTestBracket
+                    ? "Private test bracket"
+                    : snapshot.isCurrentPublic
+                      ? displayCurrentUrl
+                      : "/voting (not active yet)"}
+                </code>
               </div>
-              <div>
-                <span>Public voting link</span>
-                <code>{snapshot.status === "disabled" ? "Disabled" : displayPublicUrl}</code>
-              </div>
+              {isTestBracket ? (
+                <div>
+                  <span>Test voting link</span>
+                  <code>{snapshot.status === "disabled" ? "Discarded" : displayTestUrl}</code>
+                </div>
+              ) : (
+                <div>
+                  <span>Public voting link</span>
+                  <code>{snapshot.status === "disabled" ? "Disabled" : displayPublicUrl}</code>
+                </div>
+              )}
               {displayAdminUrl ? (
                 <div>
                   <span>Secret admin link</span>
@@ -918,7 +952,11 @@ export function BracketClient({
       return (
         <section className="bw-section-panel active">
           <div className="bw-panel-title danger">Danger Zone</div>
-          <p className="bw-panel-sub">These actions change the active tournament. Confirm prompts are required.</p>
+          <p className="bw-panel-sub">
+            {isTestBracket
+              ? "These actions only affect this private test bracket. Confirm prompts are required."
+              : "These actions change the active tournament. Confirm prompts are required."}
+          </p>
           <div className="bw-danger-card">
             <div className="bw-danger-card-header">
               <div>
@@ -944,11 +982,17 @@ export function BracketClient({
           <div className="bw-danger-card">
             <div className="bw-danger-card-header">
               <div>
-                <div className="bw-danger-card-title">Shut Down Public Link</div>
-                <div className="bw-danger-card-desc">Disables public voting for this bracket.</div>
+                <div className="bw-danger-card-title">
+                  {isTestBracket ? "Discard Test Bracket" : "Shut Down Public Link"}
+                </div>
+                <div className="bw-danger-card-desc">
+                  {isTestBracket
+                    ? "Disables this private test bracket and keeps it out of history."
+                    : "Disables public voting for this bracket."}
+                </div>
               </div>
               <button className="bw-btn bw-btn-danger-solid" onClick={shutDownNow} type="button">
-                Shut Down
+                {isTestBracket ? "Discard" : "Shut Down"}
               </button>
             </div>
           </div>
@@ -958,9 +1002,10 @@ export function BracketClient({
 
     return (
       <section className="bw-section-panel active">
-        <div className="bw-panel-title">Live Tournament</div>
+        <div className="bw-panel-title">{isTestBracket ? "Test Tournament" : "Live Tournament"}</div>
         <p className="bw-panel-sub">
           {snapshot.title} · {currentRound ? `${currentRound.label}` : "Bracket complete"}
+          {isTestBracket ? " · Private test mode" : ""}
         </p>
         <div className="bw-stats-row">
           <div className="bw-stat-card">
@@ -996,10 +1041,15 @@ export function BracketClient({
         <div className="bw-card">
           <div className="bw-card-title">Quick Actions</div>
           <div className="bw-btn-row">
-            {!snapshot.isCurrentPublic && snapshot.status !== "disabled" ? (
+            {!isTestBracket && !snapshot.isCurrentPublic && snapshot.status !== "disabled" ? (
               <button className="bw-btn bw-btn-lime" onClick={makeCurrentPublicNow} type="button">
                 Make Current Public Bracket
               </button>
+            ) : null}
+            {isTestBracket && displayTestUrl ? (
+              <a className="bw-btn bw-btn-lime" href={displayTestUrl}>
+                Open Test Voting
+              </a>
             ) : null}
             <button className="bw-btn bw-btn-lime" onClick={() => setAdminSection("advance")} type="button">
               Advance to Next Round
@@ -1023,7 +1073,7 @@ export function BracketClient({
           <div className="bw-nav-logo">
             Bored<span>@Work</span>
           </div>
-          <span className="bw-nav-badge">Admin</span>
+          <span className="bw-nav-badge">{isTestBracket ? "Admin Test Mode" : "Admin"}</span>
           <div className="bw-nav-tabs">
             <button
               className={`bw-nav-tab ${adminSection === "live" ? "active" : ""}`}
@@ -1050,7 +1100,7 @@ export function BracketClient({
         </nav>
         <div className="bw-admin-main">
           <aside className="bw-sidebar">
-            <div className="bw-sidebar-label">Live Tournament</div>
+            <div className="bw-sidebar-label">{isTestBracket ? "Test Tournament" : "Live Tournament"}</div>
             {[
               ["live", "Overview"],
               ["roster", "Who's Voted"],
@@ -1148,6 +1198,7 @@ export function BracketClient({
         <header className="bw-topic-header">
           <div className="bw-topic-round-badge">
             <span className="bw-round-dot" />
+            {isTestBracket ? "Test Mode · " : ""}
             {currentRound ? currentRound.label : "Final results"}
           </div>
           <h1 className="bw-topic-title">{snapshot.title}</h1>

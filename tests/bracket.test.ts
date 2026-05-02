@@ -394,6 +394,113 @@ test("markBracketAsCurrentPublic makes exactly one bracket the stable public tou
   assert.equal((await findCurrentPublicBracket())?.id, second.bracket.id);
 });
 
+test("test brackets stay private and cannot become the current public tournament", async () => {
+  await resetStore();
+  const publicBracket = await createBracket({
+    title: "Public Bracket",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const testBracket = await createBracket({
+    title: "Private Test Bracket",
+    kind: "test",
+    seedingMode: "manual",
+    entrants: ["Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  await markBracketAsCurrentPublic(publicBracket.adminToken);
+  await assert.rejects(() => markBracketAsCurrentPublic(testBracket.adminToken), /Test brackets/);
+
+  const current = await findCurrentPublicBracket();
+  const snapshot = await buildAdminSnapshot(testBracket.bracket, testBracket.adminToken);
+
+  assert.equal(current?.id, publicBracket.bracket.id);
+  assert.equal(testBracket.bracket.isCurrentPublic, false);
+  assert.equal(testBracket.bracket.rounds[0].status, "live");
+  assert.equal(snapshot.kind, "test");
+  assert.equal(snapshot.publicUrl.startsWith("/test?adminToken="), true);
+});
+
+test("completed test brackets never appear in tournament history", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
+    title: "Private Test Bracket",
+    kind: "test",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const matchup = bracket.rounds[0].matchups[0];
+  const updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: matchup.id,
+    entrantId: matchup.entrantAId!,
+    rosterMemberId: bracket.rosterMembers[0].id,
+  });
+  advanceBracket(updated, new Date(Date.now() + 60 * 60 * 1000));
+  await writeStore({ brackets: [updated] });
+
+  assert.equal(updated.status, "completed");
+  assert.equal((await listBracketHistory()).length, 0);
+});
+
+test("test brackets still support tie-breaker resolution and restart controls", async () => {
+  await resetStore();
+  const { bracket, adminToken } = await createBracket({
+    title: "Private Test Bracket",
+    kind: "test",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const matchup = bracket.rounds[0].matchups[0];
+  let updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: matchup.id,
+    entrantId: matchup.entrantAId!,
+    rosterMemberId: bracket.rosterMembers[0].id,
+  });
+  updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: matchup.id,
+    entrantId: matchup.entrantBId!,
+    rosterMemberId: bracket.rosterMembers[1].id,
+  });
+  advanceBracket(updated, new Date(Date.now() + 60 * 60 * 1000));
+  await writeStore({ brackets: [updated] });
+
+  assert.equal(updated.rounds[0].status, "tiebreaker");
+
+  const resolved = await resolveTieBreaker({
+    adminToken,
+    matchupId: matchup.id,
+    winnerEntrantId: matchup.entrantBId!,
+  });
+
+  assert.equal(resolved.status, "completed");
+  restartBracket(resolved);
+  assert.equal(resolved.status, "live");
+  assert.equal(resolved.rounds[0].status, "live");
+  assert.equal(resolved.rounds[0].matchups[0].votes.length, 0);
+});
+
 test("buildPreviewSnapshot preserves a provided random preview seed order", async () => {
   await resetStore();
   const snapshot = buildPreviewSnapshot({
