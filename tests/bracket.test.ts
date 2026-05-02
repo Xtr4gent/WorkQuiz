@@ -60,6 +60,28 @@ test("createBracket builds the bracket and returns an admin token", async () => 
   assert.equal(bracket.entrants[0].imageUrl, "https://example.com/mars.jpg");
 });
 
+test("manual seeding pairs adjacent entrants in round one", async () => {
+  await resetStore();
+  const entrants = Array.from({ length: 32 }, (_, index) => `Option ${index + 1}`);
+  const { bracket } = await createBracket({
+    title: "Manual Order Showdown",
+    seedingMode: "manual",
+    entrants,
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  assert.equal(bracket.rounds[0].matchups.length, 16);
+  for (const [index, matchup] of bracket.rounds[0].matchups.entries()) {
+    const expectedA = bracket.entrants[index * 2];
+    const expectedB = bracket.entrants[index * 2 + 1];
+    assert.equal(matchup.entrantAId, expectedA.id);
+    assert.equal(matchup.entrantBId, expectedB.id);
+  }
+});
+
 test("castVote rejects duplicate votes from the same roster member in a matchup", async () => {
   await resetStore();
   const { bracket } = await createBracket({

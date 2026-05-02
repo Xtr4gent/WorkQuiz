@@ -21,7 +21,6 @@ import {
 } from "@/lib/workquiz/types";
 import {
   addHours,
-  buildSeedOrder,
   hashValue,
   isoDate,
   nextPowerOfTwo,
@@ -127,7 +126,6 @@ function buildRoundsForBracket(
   const bracketSize = nextPowerOfTwo(bracket.entrants.length);
   const totalRounds = Math.log2(bracketSize);
   const roundSchedule = parseSchedule(startsAt, roundDurationHours, totalRounds, endsAt);
-  const seedOrder = buildSeedOrder(bracketSize);
   const seedToEntrant = new Map(bracket.entrants.map((entrant) => [entrant.seed, entrant]));
 
   const rounds: RoundRecord[] = Array.from({ length: totalRounds }, (_, index) => ({
@@ -144,8 +142,8 @@ function buildRoundsForBracket(
   }));
 
   rounds[0].matchups = Array.from({ length: bracketSize / 2 }, (_, index) => {
-    const seedA = seedOrder[index * 2];
-    const seedB = seedOrder[index * 2 + 1];
+    const seedA = index * 2 + 1;
+    const seedB = index * 2 + 2;
 
     return {
       id: nanoid(),
