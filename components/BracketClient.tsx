@@ -600,7 +600,6 @@ export function BracketClient({
                     >
                       <div className={`bw-b-entry ${winnerA ? "winner" : winnerB ? "loser" : ""}`}>
                         <span className="bw-b-seed">{matchup.entrantA?.seed ?? ""}</span>
-                        {renderEntrantImage(matchup.entrantA, "bw-b-entry-thumb")}
                         <span className="bw-b-name">{entrantLabel(matchup.entrantA)}</span>
                         {winnerA ? <span className="bw-b-win-dot" /> : null}
                         {matchup.status === "live" ? <span className="bw-b-live-dot" /> : null}
@@ -608,7 +607,6 @@ export function BracketClient({
                       </div>
                       <div className={`bw-b-entry ${winnerB ? "winner" : winnerA ? "loser" : ""}`}>
                         <span className="bw-b-seed">{matchup.entrantB?.seed ?? ""}</span>
-                        {renderEntrantImage(matchup.entrantB, "bw-b-entry-thumb")}
                         <span className="bw-b-name">{entrantLabel(matchup.entrantB)}</span>
                         {winnerB ? <span className="bw-b-win-dot" /> : null}
                         {matchup.status === "live" ? <span className="bw-b-live-dot" /> : null}

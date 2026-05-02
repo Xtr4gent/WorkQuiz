@@ -1464,8 +1464,7 @@ button {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.bw-vote-card-media,
-.bw-b-entry-thumb {
+.bw-vote-card-media {
   background-position: center;
   background-size: cover;
 }
@@ -1729,15 +1728,6 @@ button {
   font-size: 12px;
   font-weight: 600;
   padding: 0 10px;
-}
-
-.bw-b-entry-thumb {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  overflow: hidden;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.06);
 }
 
 .bw-b-entry:last-child {
