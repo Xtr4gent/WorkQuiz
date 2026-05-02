@@ -5,6 +5,7 @@ import {
   DEFAULT_ROUND_DURATION_HOURS,
 } from "@/lib/workquiz/constants";
 import { publish } from "@/lib/workquiz/realtime";
+import { schedulePendingRoundStartPings } from "@/lib/workquiz/round-start-ping";
 import { readStore, updateStore, writeStore } from "@/lib/workquiz/store";
 import {
   AdminVoteEntry,
@@ -74,8 +75,8 @@ function winnerNameForBracket(bracket: BracketRecord) {
   return bracket.entrants.find((entrant) => entrant.id === winnerEntrantId)?.name ?? null;
 }
 
-function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
-  return readStore()
+async function buildAdminHistory(activeBracketId?: string): Promise<AdminHistoryItem[]> {
+  return (await readStore())
     .brackets
     .filter(
       (bracket) =>
@@ -102,8 +103,8 @@ function buildAdminHistory(activeBracketId?: string): AdminHistoryItem[] {
     .sort((left, right) => new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime());
 }
 
-export function listBracketHistory(limit?: number) {
-  const history = buildAdminHistory();
+export async function listBracketHistory(limit?: number) {
+  const history = await buildAdminHistory();
 
   if (typeof limit === "number") {
     return history.slice(0, limit);
@@ -249,7 +250,7 @@ export function resolveAutomaticWinners(bracket: BracketRecord) {
   }
 }
 
-export function createBracket(input: CreateBracketInput) {
+export async function createBracket(input: CreateBracketInput) {
   const sourceEntrants =
     input.seededEntrants?.length === input.entrants.length
       ? input.seededEntrants
@@ -289,7 +290,7 @@ export function createBracket(input: CreateBracketInput) {
 
   bracket.rounds = buildRoundsForBracket(bracket, input.startsAt, roundDurationHours, input.endsAt);
 
-  updateStore((store) => ({
+  await updateStore((store) => ({
     ...store,
     brackets: [...store.brackets, bracket],
   }));
@@ -416,8 +417,8 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
   }
 }
 
-export function advanceReadyBrackets(now = new Date()) {
-  const store = readStore();
+export async function advanceReadyBrackets(now = new Date()) {
+  const store = await readStore();
   let changed = false;
 
   for (const bracket of store.brackets) {
@@ -434,34 +435,37 @@ export function advanceReadyBrackets(now = new Date()) {
   }
 
   if (changed) {
-    writeStore(store);
+    await writeStore(store);
+    schedulePendingRoundStartPings();
   }
 
   return store.brackets;
 }
 
-export function findBracketByPublicToken(publicToken: string) {
-  return readStore().brackets.find((bracket) => bracket.publicToken === publicToken) ?? null;
+export async function findBracketByPublicToken(publicToken: string) {
+  return (await readStore()).brackets.find((bracket) => bracket.publicToken === publicToken) ?? null;
 }
 
-export function findCurrentPublicBracket() {
+export async function findCurrentPublicBracket() {
   return (
-    readStore().brackets.find((bracket) => bracket.isCurrentPublic && bracket.status !== "disabled") ?? null
+    (await readStore()).brackets.find((bracket) => bracket.isCurrentPublic && bracket.status !== "disabled") ?? null
   );
 }
 
-export function findBracketByAdminToken(adminToken: string) {
+export async function findBracketByAdminToken(adminToken: string) {
   const tokenHash = hashValue(adminToken);
-  return readStore().brackets.find((bracket) => bracket.adminTokenHash === tokenHash) ?? null;
+  return (await readStore()).brackets.find((bracket) => bracket.adminTokenHash === tokenHash) ?? null;
 }
 
-export function castVote(params: {
+export async function castVote(params: {
   publicToken: string;
   matchupId: string;
   entrantId: string;
   rosterMemberId: string;
 }) {
-  updateStore((store) => {
+  let updatedBracketId: string | null = null;
+
+  const updatedStore = await updateStore((store) => {
     const bracket = store.brackets.find((entry) => entry.publicToken === params.publicToken);
     if (!bracket) {
       throw new Error("Bracket not found.");
@@ -502,16 +506,18 @@ export function castVote(params: {
       createdAt: new Date().toISOString(),
     });
     matchup.updatedAt = new Date().toISOString();
+    updatedBracketId = bracket.id;
 
     return store;
   });
 
-  const updated = findBracketByPublicToken(params.publicToken);
+  const updated = updatedStore.brackets.find((bracket) => bracket.id === updatedBracketId) ?? null;
   if (!updated) {
     throw new Error("Vote failed.");
   }
 
   publish(updated.publicToken, { type: "vote" });
+  schedulePendingRoundStartPings();
   return updated;
 }
 
@@ -537,8 +543,10 @@ export function disableBracket(bracket: BracketRecord) {
   }
 }
 
-export function markBracketAsCurrentPublic(adminToken: string) {
-  updateStore((store) => {
+export async function markBracketAsCurrentPublic(adminToken: string) {
+  let updatedBracketId: string | null = null;
+
+  const updatedStore = await updateStore((store) => {
     const targetHash = hashValue(adminToken);
     const target = store.brackets.find((entry) => entry.adminTokenHash === targetHash);
     if (!target) {
@@ -552,25 +560,29 @@ export function markBracketAsCurrentPublic(adminToken: string) {
     for (const bracket of store.brackets) {
       bracket.isCurrentPublic = bracket.id === target.id;
     }
+    updatedBracketId = target.id;
 
     return store;
   });
 
-  const updated = findBracketByAdminToken(adminToken);
+  const updated = updatedStore.brackets.find((bracket) => bracket.id === updatedBracketId) ?? null;
   if (!updated) {
     throw new Error("Bracket not found.");
   }
 
   publish(updated.publicToken, { type: "current-public" });
+  schedulePendingRoundStartPings();
   return updated;
 }
 
-export function clearMatchupVote(params: {
+export async function clearMatchupVote(params: {
   adminToken: string;
   matchupId: string;
   rosterMemberId: string;
 }) {
-  updateStore((store) => {
+  let updatedBracketId: string | null = null;
+
+  const updatedStore = await updateStore((store) => {
     const bracket = store.brackets.find((entry) => entry.adminTokenHash === hashValue(params.adminToken));
     if (!bracket) {
       throw new Error("Bracket not found.");
@@ -596,11 +608,12 @@ export function clearMatchupVote(params: {
 
     targetMatchup.votes = nextVotes;
     targetMatchup.updatedAt = new Date().toISOString();
+    updatedBracketId = bracket.id;
 
     return store;
   });
 
-  const updated = findBracketByAdminToken(params.adminToken);
+  const updated = updatedStore.brackets.find((bracket) => bracket.id === updatedBracketId) ?? null;
   if (!updated) {
     throw new Error("Bracket not found.");
   }
@@ -611,7 +624,12 @@ export function clearMatchupVote(params: {
 
 export function buildSnapshot(
   bracket: BracketRecord,
-  options?: { rosterMemberId?: string; includeAdminUrl?: boolean; adminToken?: string },
+  options?: {
+    rosterMemberId?: string;
+    includeAdminUrl?: boolean;
+    adminToken?: string;
+    adminHistory?: AdminHistoryItem[];
+  },
 ): BracketSnapshot {
   if (bracket.status !== "disabled") {
     advanceBracket(bracket, new Date());
@@ -713,8 +731,16 @@ export function buildSnapshot(
     totalVotes,
     selectedRosterMemberId: options?.rosterMemberId ?? null,
     currentRoundRosterStatuses,
-    adminHistory: options?.includeAdminUrl ? buildAdminHistory(bracket.id) : undefined,
+    adminHistory: options?.includeAdminUrl ? options.adminHistory ?? [] : undefined,
   };
+}
+
+export async function buildAdminSnapshot(bracket: BracketRecord, adminToken: string) {
+  return buildSnapshot(bracket, {
+    includeAdminUrl: true,
+    adminToken,
+    adminHistory: await buildAdminHistory(bracket.id),
+  });
 }
 
 export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot {
@@ -760,6 +786,6 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
   return buildSnapshot(previewBracket);
 }
 
-export function findBracketById(bracketId: string) {
-  return readStore().brackets.find((bracket) => bracket.id === bracketId) ?? null;
+export async function findBracketById(bracketId: string) {
+  return (await readStore()).brackets.find((bracket) => bracket.id === bracketId) ?? null;
 }

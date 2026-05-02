@@ -1,0 +1,16 @@
+---
+description: Require explicit tournament safety confirmation before commits or pushes
+alwaysApply: true
+---
+
+# Tournament Deploy Safety
+
+Never run `git commit`, `git push`, create a PR, merge, deploy, or trigger any workflow that can redeploy production until you ask:
+
+> Is a tournament live right now?
+
+Only proceed if the user explicitly answers `No`.
+
+If the user says `Yes`, is unsure, or does not answer clearly, do not commit, push, merge, deploy, or trigger Railway. Continue with local edits and validation only.
+
+This applies even when the user asks to "commit", "push", "ship", "deploy", or "quick fix" unless they have already answered that no tournament is live in the current conversation.

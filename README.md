@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WorkQuiz / Bored@Work
 
-## Getting Started
+Office tournament voting app with three public surfaces:
 
-First, run the development server:
+- `/` landing page
+- `/voting` public voting page
+- `/admin` admin portal
+
+## Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Persistence
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Production must use Postgres persistence. Set `DATABASE_URL` on Railway before deploying. The app refuses to use file storage in production unless `WORKQUIZ_ALLOW_FILE_STORE=true` is explicitly set, because file storage can be wiped by redeploys.
 
-## Learn More
+Local development and tests can still use `data/workquiz.json` when `DATABASE_URL` is not set.
 
-To learn more about Next.js, take a look at the following resources:
+## Round Start Pings
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Set `WORKQUIZ_ROUND_START_PING_URL` to send a GET ping when a public tournament round starts. The app records round ping state in the bracket store so status checks and redeploys do not spam repeated messages.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Migrating Existing JSON Data
 
-## Deploy on Vercel
+After provisioning Railway Postgres and setting `DATABASE_URL`, migrate any existing JSON store before deploying:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run migrate:postgres
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+You can pass a custom JSON path if needed:
+
+```bash
+npm run migrate:postgres -- path/to/workquiz.json
+```
+
+## Railway Cutover Checklist
+
+Do not deploy while a tournament is live.
+
+1. Confirm no tournament is live.
+2. Provision Railway Postgres.
+3. Set `DATABASE_URL` on the app service.
+4. Run `npm run migrate:postgres` against the Railway database if there is JSON data to preserve.
+5. Deploy.
+6. Verify `/api/status`, `/voting`, `/admin`, vote submission, and round advancement.

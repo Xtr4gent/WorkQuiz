@@ -8,7 +8,7 @@ export async function POST(
   context: { params: Promise<{ publicToken: string }> },
 ) {
   const { publicToken } = await context.params;
-  const bracket = findBracketByPublicToken(publicToken);
+  const bracket = await findBracketByPublicToken(publicToken);
 
   if (!bracket) {
     return NextResponse.json({ error: "Bracket not found." }, { status: 404 });

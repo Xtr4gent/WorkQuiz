@@ -7,11 +7,14 @@
     "build": "next build",
     "start": "cross-env NODE_ENV=production tsx server.ts",
     "lint": "eslint .",
+    "migrate:postgres": "tsx scripts/migrate-workquiz-json-to-postgres.ts",
     "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "@types/pg": "^8.20.0",
     "nanoid": "^5.1.7",
     "next": "16.2.2",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "ws": "^8.20.0"

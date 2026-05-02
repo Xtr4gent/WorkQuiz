@@ -7,7 +7,7 @@ import { buildSnapshot, findCurrentPublicBracket } from "@/lib/workquiz/bracket"
 export const dynamic = "force-dynamic";
 
 export default async function VotingPage() {
-  const bracket = findCurrentPublicBracket();
+  const bracket = await findCurrentPublicBracket();
 
   if (!bracket) {
     return (

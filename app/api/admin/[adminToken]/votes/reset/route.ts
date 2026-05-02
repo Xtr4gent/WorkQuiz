@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { buildSnapshot, clearMatchupVote, findBracketByAdminToken } from "@/lib/workquiz/bracket";
+import { buildAdminSnapshot, clearMatchupVote, findBracketByAdminToken } from "@/lib/workquiz/bracket";
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ adminToken: string }> },
 ) {
   const { adminToken } = await context.params;
-  const bracket = findBracketByAdminToken(adminToken);
+  const bracket = await findBracketByAdminToken(adminToken);
 
   if (!bracket) {
     return NextResponse.json({ error: "Bracket not found." }, { status: 404 });
@@ -23,13 +23,13 @@ export async function POST(
   }
 
   try {
-    const updated = clearMatchupVote({
+    const updated = await clearMatchupVote({
       adminToken,
       matchupId: body.matchupId,
       rosterMemberId: body.rosterMemberId,
     });
 
-    return NextResponse.json(buildSnapshot(updated, { includeAdminUrl: true, adminToken }));
+    return NextResponse.json(await buildAdminSnapshot(updated, adminToken));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not clear the vote." },

@@ -11,6 +11,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const brackets = advanceReadyBrackets();
+  const brackets = await advanceReadyBrackets();
   return NextResponse.json({ ok: true, brackets: brackets.length });
 }

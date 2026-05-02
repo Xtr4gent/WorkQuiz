@@ -39,6 +39,8 @@ export interface RoundRecord {
   startsAt: string;
   endsAt: string;
   status: RoundStatus;
+  roundStartPingClaimedAt?: string;
+  roundStartPingedAt?: string;
   matchups: MatchupRecord[];
 }
 

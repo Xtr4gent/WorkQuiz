@@ -11,11 +11,11 @@ import { DEFAULT_LANDING_HISTORY } from "@/lib/workquiz/landing-history";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  advanceReadyBrackets(new Date());
-  const bracket = findCurrentPublicBracket();
+  await advanceReadyBrackets(new Date());
+  const bracket = await findCurrentPublicBracket();
   const snapshot = bracket ? buildSnapshot(bracket) : null;
   const live = snapshot?.rounds.some((round) => round.status === "live") ?? false;
-  const history = listBracketHistory(6).map((item) => ({
+  const history = (await listBracketHistory(6)).map((item) => ({
     topic: item.title,
     winner: item.winnerName,
     runners: item.entrantNames,

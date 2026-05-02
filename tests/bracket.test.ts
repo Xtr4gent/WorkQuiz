@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   advanceBracket,
+  buildAdminSnapshot,
   buildPreviewSnapshot,
   buildSnapshot,
   castVote,
@@ -26,16 +27,16 @@ import { ensureStore, readStore, writeStore } from "@/lib/workquiz/store";
 
 const roster = ["Gabe", "Alex", "Jordan", "Sam"];
 
-function resetStore() {
-  ensureStore();
-  writeStore({ brackets: [] });
+async function resetStore() {
+  await ensureStore();
+  await writeStore({ brackets: [] });
 }
 
-test("createBracket builds the bracket and returns an admin token", () => {
-  resetStore();
+test("createBracket builds the bracket and returns an admin token", async () => {
+  await resetStore();
   const startsAt = new Date().toISOString();
   const endsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const { bracket, adminToken } = createBracket({
+  const { bracket, adminToken } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -52,9 +53,9 @@ test("createBracket builds the bracket and returns an admin token", () => {
   assert.equal(bracket.totalPlayers, roster.length);
 });
 
-test("castVote rejects duplicate votes from the same roster member in a matchup", () => {
-  resetStore();
-  const { bracket } = createBracket({
+test("castVote rejects duplicate votes from the same roster member in a matchup", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -67,14 +68,14 @@ test("castVote rejects duplicate votes from the same roster member in a matchup"
   const matchup = bracket.rounds[0].matchups[0];
   const voterId = bracket.rosterMembers[0].id;
 
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: matchup.id,
     entrantId: matchup.entrantAId!,
     rosterMemberId: voterId,
   });
 
-  assert.throws(() =>
+  await assert.rejects(() =>
     castVote({
       publicToken: bracket.publicToken,
       matchupId: matchup.id,
@@ -84,10 +85,10 @@ test("castVote rejects duplicate votes from the same roster member in a matchup"
   );
 });
 
-test("advanceBracket picks the higher seed on non-final ties and creates a final revote", () => {
-  resetStore();
+test("advanceBracket picks the higher seed on non-final ties and creates a final revote", async () => {
+  await resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const { bracket } = createBracket({
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -100,19 +101,19 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
   const semiA = bracket.rounds[0].matchups[0];
   const semiB = bracket.rounds[0].matchups[1];
 
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantAId!,
     rosterMemberId: bracket.rosterMembers[0].id,
   });
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantBId!,
     rosterMemberId: bracket.rosterMembers[1].id,
   });
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiB.id,
     entrantId: semiB.entrantAId!,
@@ -140,9 +141,9 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
   assert.equal(bracket.rounds.at(-1)?.label, "Final Revote");
 });
 
-test("buildSnapshot marks a roster member green only after finishing the whole current round", () => {
-  resetStore();
-  const { bracket } = createBracket({
+test("buildSnapshot marks a roster member green only after finishing the whole current round", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -154,7 +155,7 @@ test("buildSnapshot marks a roster member green only after finishing the whole c
 
   const voterId = bracket.rosterMembers[0].id;
 
-  let updated = castVote({
+  let updated = await castVote({
     publicToken: bracket.publicToken,
     matchupId: bracket.rounds[0].matchups[0].id,
     entrantId: bracket.rounds[0].matchups[0].entrantAId!,
@@ -168,7 +169,7 @@ test("buildSnapshot marks a roster member green only after finishing the whole c
     false,
   );
 
-  updated = castVote({
+  updated = await castVote({
     publicToken: bracket.publicToken,
     matchupId: updated.rounds[0].matchups[1].id,
     entrantId: updated.rounds[0].matchups[1].entrantAId!,
@@ -181,11 +182,11 @@ test("buildSnapshot marks a roster member green only after finishing the whole c
   assert.equal(snapshot.selectedRosterMemberId, voterId);
 });
 
-test("buildSnapshot points at the next upcoming round before voting opens", () => {
-  resetStore();
+test("buildSnapshot points at the next upcoming round before voting opens", async () => {
+  await resetStore();
   const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const endsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-  const { bracket } = createBracket({
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero", "Aero Mint", "Crunchie", "Coffee Crisp", "Smarties"],
@@ -203,9 +204,9 @@ test("buildSnapshot points at the next upcoming round before voting opens", () =
   assert.equal(snapshot.rounds[2].label, "Finals");
 });
 
-test("daily round windows reuse the same 6 AM to 8 PM window on following days", () => {
-  resetStore();
-  const { bracket } = createBracket({
+test("daily round windows reuse the same 6 AM to 8 PM window on following days", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -221,9 +222,9 @@ test("daily round windows reuse the same 6 AM to 8 PM window on following days",
   assert.equal(bracket.rounds[1].endsAt, "2099-01-07T01:00:00.000Z");
 });
 
-test("daily round windows wait overnight before opening the next round", () => {
-  resetStore();
-  const { bracket } = createBracket({
+test("daily round windows wait overnight before opening the next round", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -245,10 +246,10 @@ test("daily round windows wait overnight before opening the next round", () => {
   assert.equal(bracket.rounds[1].matchups[0].status, "live");
 });
 
-test("restartBracket clears votes and sends the bracket back to round one", () => {
-  resetStore();
+test("restartBracket clears votes and sends the bracket back to round one", async () => {
+  await resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const { bracket } = createBracket({
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -260,7 +261,7 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
 
   const openingMatchup = bracket.rounds[0].matchups[0];
 
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: openingMatchup.id,
     entrantId: openingMatchup.entrantAId!,
@@ -278,10 +279,10 @@ test("restartBracket clears votes and sends the bracket back to round one", () =
   assert.equal(bracket.rounds[0].matchups[0].winnerEntrantId, null);
 });
 
-test("disableBracket makes the bracket unavailable for public use", () => {
-  resetStore();
+test("disableBracket makes the bracket unavailable for public use", async () => {
+  await resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const { bracket } = createBracket({
+  const { bracket } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -292,13 +293,13 @@ test("disableBracket makes the bracket unavailable for public use", () => {
   });
 
   disableBracket(bracket);
-  writeStore({ brackets: [bracket] });
+  await writeStore({ brackets: [bracket] });
   const snapshot = buildSnapshot(bracket);
 
   assert.equal(snapshot.status, "disabled");
   assert.equal(snapshot.rounds[0].status, "closed");
   assert.equal(snapshot.rounds[0].matchups[0].status, "closed");
-  assert.throws(() =>
+  await assert.rejects(() =>
     castVote({
       publicToken: bracket.publicToken,
       matchupId: bracket.rounds[0].matchups[0].id,
@@ -308,9 +309,9 @@ test("disableBracket makes the bracket unavailable for public use", () => {
   );
 });
 
-test("clearMatchupVote removes one person's vote from a specific matchup", () => {
-  resetStore();
-  const { bracket, adminToken } = createBracket({
+test("clearMatchupVote removes one person's vote from a specific matchup", async () => {
+  await resetStore();
+  const { bracket, adminToken } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -323,14 +324,14 @@ test("clearMatchupVote removes one person's vote from a specific matchup", () =>
   const matchup = bracket.rounds[0].matchups[0];
   const voterId = bracket.rosterMembers[0].id;
 
-  castVote({
+  await castVote({
     publicToken: bracket.publicToken,
     matchupId: matchup.id,
     entrantId: matchup.entrantAId!,
     rosterMemberId: voterId,
   });
 
-  const updated = clearMatchupVote({
+  const updated = await clearMatchupVote({
     adminToken,
     matchupId: matchup.id,
     rosterMemberId: voterId,
@@ -341,9 +342,9 @@ test("clearMatchupVote removes one person's vote from a specific matchup", () =>
   assert.equal(snapshot.rounds[0].matchups[0].adminVotes?.length, 0);
 });
 
-test("markBracketAsCurrentPublic makes exactly one bracket the stable public tournament", () => {
-  resetStore();
-  const first = createBracket({
+test("markBracketAsCurrentPublic makes exactly one bracket the stable public tournament", async () => {
+  await resetStore();
+  const first = await createBracket({
     title: "First Bracket",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -353,7 +354,7 @@ test("markBracketAsCurrentPublic makes exactly one bracket the stable public tou
     roundDurationHours: 1,
   });
 
-  const second = createBracket({
+  const second = await createBracket({
     title: "Second Bracket",
     seedingMode: "manual",
     entrants: ["Kit Kat", "Aero"],
@@ -363,21 +364,21 @@ test("markBracketAsCurrentPublic makes exactly one bracket the stable public tou
     roundDurationHours: 1,
   });
 
-  let current = markBracketAsCurrentPublic(first.adminToken);
+  let current = await markBracketAsCurrentPublic(first.adminToken);
   assert.equal(current.title, "First Bracket");
-  assert.equal(findCurrentPublicBracket()?.id, first.bracket.id);
+  assert.equal((await findCurrentPublicBracket())?.id, first.bracket.id);
 
-  current = markBracketAsCurrentPublic(second.adminToken);
+  current = await markBracketAsCurrentPublic(second.adminToken);
   assert.equal(current.title, "Second Bracket");
 
-  const store = readStore();
+  const store = await readStore();
   assert.equal(store.brackets.find((entry) => entry.id === first.bracket.id)?.isCurrentPublic, false);
   assert.equal(store.brackets.find((entry) => entry.id === second.bracket.id)?.isCurrentPublic, true);
-  assert.equal(findCurrentPublicBracket()?.id, second.bracket.id);
+  assert.equal((await findCurrentPublicBracket())?.id, second.bracket.id);
 });
 
-test("buildPreviewSnapshot preserves a provided random preview seed order", () => {
-  resetStore();
+test("buildPreviewSnapshot preserves a provided random preview seed order", async () => {
+  await resetStore();
   const snapshot = buildPreviewSnapshot({
     title: "Chocolate Bar Showdown",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -394,9 +395,9 @@ test("buildPreviewSnapshot preserves a provided random preview seed order", () =
   assert.equal(snapshot.rosterMembers.length, roster.length);
 });
 
-test("admin snapshot includes previous completed topics and winners", () => {
-  resetStore();
-  const { bracket: current, adminToken } = createBracket({
+test("admin snapshot includes previous completed topics and winners", async () => {
+  await resetStore();
+  const { bracket: current, adminToken } = await createBracket({
     title: "Current Bracket",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -406,7 +407,7 @@ test("admin snapshot includes previous completed topics and winners", () => {
     roundDurationHours: 1,
   });
 
-  const { bracket: previous } = createBracket({
+  const { bracket: previous } = await createBracket({
     title: "Previous Bracket",
     seedingMode: "manual",
     entrants: ["Kit Kat", "Aero"],
@@ -416,25 +417,25 @@ test("admin snapshot includes previous completed topics and winners", () => {
     roundDurationHours: 1,
   });
 
-  const store = readStore();
+  const store = await readStore();
   const storedPrevious = store.brackets.find((entry) => entry.id === previous.id)!;
   storedPrevious.rounds[0].matchups[0].winnerEntrantId = storedPrevious.rounds[0].matchups[0].entrantAId;
   storedPrevious.rounds[0].matchups[0].status = "closed";
   storedPrevious.rounds[0].status = "closed";
   storedPrevious.status = "completed";
-  writeStore(store);
+  await writeStore(store);
 
-  const snapshot = buildSnapshot(current, { includeAdminUrl: true, adminToken });
+  const snapshot = await buildAdminSnapshot(current, adminToken);
 
   assert.equal(snapshot.adminHistory?.length, 1);
   assert.equal(snapshot.adminHistory?.[0].title, "Previous Bracket");
   assert.equal(snapshot.adminHistory?.[0].winnerName, "Kit Kat");
 });
 
-test("listBracketHistory returns only real finished brackets in newest-first order", () => {
-  resetStore();
+test("listBracketHistory returns only real finished brackets in newest-first order", async () => {
+  await resetStore();
 
-  const { bracket: liveBracket } = createBracket({
+  const { bracket: liveBracket } = await createBracket({
     title: "Still Live",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -444,7 +445,7 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
     roundDurationHours: 1,
   });
 
-  const { bracket: olderBracket } = createBracket({
+  const { bracket: olderBracket } = await createBracket({
     title: "Best Chocolate Bar",
     seedingMode: "manual",
     entrants: ["Kit Kat", "Aero"],
@@ -454,7 +455,7 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
     roundDurationHours: 1,
   });
 
-  const { bracket: newerBracket } = createBracket({
+  const { bracket: newerBracket } = await createBracket({
     title: "Best Soda",
     seedingMode: "manual",
     entrants: ["Coke", "Pepsi"],
@@ -464,7 +465,7 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
     roundDurationHours: 1,
   });
 
-  const store = readStore();
+  const store = await readStore();
   const storedOlder = store.brackets.find((entry) => entry.id === olderBracket.id)!;
   storedOlder.rounds[0].matchups[0].winnerEntrantId = storedOlder.rounds[0].matchups[0].entrantAId;
   storedOlder.rounds[0].matchups[0].status = "closed";
@@ -480,9 +481,9 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
 
   const storedLive = store.brackets.find((entry) => entry.id === liveBracket.id)!;
   storedLive.publishedAt = new Date().toISOString();
-  writeStore(store);
+  await writeStore(store);
 
-  const history = listBracketHistory();
+  const history = await listBracketHistory();
 
   assert.equal(history.length, 2);
   assert.equal(history[0].title, "Best Soda");
@@ -528,9 +529,9 @@ test("sanitizeAdminRedirectTarget only allows safe in-app page routes", () => {
 });
 
 test("status route reports live state separately from current bracket presence", async () => {
-  resetStore();
+  await resetStore();
 
-  const { bracket, adminToken } = createBracket({
+  const { bracket, adminToken } = await createBracket({
     title: "Best Chocolate Bar",
     seedingMode: "manual",
     entrants: ["Mars", "Twix"],
@@ -540,7 +541,7 @@ test("status route reports live state separately from current bracket presence",
     roundDurationHours: 1,
   });
 
-  markBracketAsCurrentPublic(adminToken);
+  await markBracketAsCurrentPublic(adminToken);
 
   let response = await getStatusRoute();
   let body = await response.json();
@@ -551,13 +552,13 @@ test("status route reports live state separately from current bracket presence",
   assert.equal(body.currentUrl, "/voting");
   assert.equal(body.adminUrl, "/admin");
 
-  const store = readStore();
+  const store = await readStore();
   const storedBracket = store.brackets.find((entry) => entry.id === bracket.id)!;
   storedBracket.rounds[0].matchups[0].winnerEntrantId = storedBracket.rounds[0].matchups[0].entrantAId;
   storedBracket.rounds[0].matchups[0].status = "closed";
   storedBracket.rounds[0].status = "closed";
   storedBracket.status = "completed";
-  writeStore(store);
+  await writeStore(store);
 
   response = await getStatusRoute();
   body = await response.json();
@@ -569,7 +570,7 @@ test("status route reports live state separately from current bracket presence",
 });
 
 test("status route falls back to the single real landing tournament when history is empty", async () => {
-  resetStore();
+  await resetStore();
 
   const response = await getStatusRoute();
   const body = await response.json();

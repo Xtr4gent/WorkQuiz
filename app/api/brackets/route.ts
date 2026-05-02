@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { adminToken } = createBracket({
+  const { adminToken } = await createBracket({
     title: body.title.trim(),
     entrants,
     rosterMembers,

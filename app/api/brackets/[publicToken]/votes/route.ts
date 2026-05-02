@@ -7,7 +7,7 @@ export async function POST(
   context: { params: Promise<{ publicToken: string }> },
 ) {
   const { publicToken } = await context.params;
-  const bracket = findBracketByPublicToken(publicToken);
+  const bracket = await findBracketByPublicToken(publicToken);
   const body = (await request.json()) as {
     matchupId?: string;
     entrantId?: string;
@@ -26,7 +26,7 @@ export async function POST(
   }
 
   try {
-    const updatedBracket = castVote({
+    const updatedBracket = await castVote({
       publicToken,
       matchupId: body.matchupId,
       entrantId: body.entrantId,

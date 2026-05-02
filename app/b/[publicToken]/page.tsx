@@ -8,7 +8,7 @@ export default async function PublicBracketPage({
   params: Promise<{ publicToken: string }>;
 }) {
   const { publicToken } = await params;
-  const bracket = findBracketByPublicToken(publicToken);
+  const bracket = await findBracketByPublicToken(publicToken);
 
   if (!bracket) {
     notFound();

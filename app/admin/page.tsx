@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { BracketClient } from "@/components/BracketClient";
 import { CreateBracketForm } from "@/components/CreateBracketForm";
-import { buildSnapshot, findBracketByAdminToken, findBracketById } from "@/lib/workquiz/bracket";
+import { buildAdminSnapshot, findBracketByAdminToken, findBracketById } from "@/lib/workquiz/bracket";
 
 export const dynamic = "force-dynamic";
 
@@ -80,15 +80,12 @@ export default async function AdminPage({
   searchParams: Promise<{ adminToken?: string; template?: string }>;
 }) {
   const params = await searchParams;
-  const authorizedAdmin = params.adminToken ? findBracketByAdminToken(params.adminToken) : null;
+  const authorizedAdmin = params.adminToken ? await findBracketByAdminToken(params.adminToken) : null;
   const templateBracket =
-    authorizedAdmin && params.template ? findBracketById(params.template) : null;
+    authorizedAdmin && params.template ? await findBracketById(params.template) : null;
 
   if (params.adminToken && authorizedAdmin && !params.template) {
-    const snapshot = buildSnapshot(authorizedAdmin, {
-      includeAdminUrl: true,
-      adminToken: params.adminToken,
-    });
+    const snapshot = await buildAdminSnapshot(authorizedAdmin, params.adminToken);
 
     return (
       <BracketClient
