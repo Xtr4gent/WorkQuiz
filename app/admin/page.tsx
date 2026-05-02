@@ -2,13 +2,33 @@ import Link from "next/link";
 
 import { BracketClient } from "@/components/BracketClient";
 import { CreateBracketForm } from "@/components/CreateBracketForm";
-import { buildAdminSnapshot, findBracketByAdminToken, findBracketById } from "@/lib/workquiz/bracket";
+import {
+  buildAdminSnapshot,
+  findBracketByAdminToken,
+  findBracketById,
+  listBracketHistory,
+} from "@/lib/workquiz/bracket";
+import type { AdminHistoryItem } from "@/lib/workquiz/types";
 
 export const dynamic = "force-dynamic";
 
+const adminDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function formatAdminDate(value: string) {
+  return adminDateFormatter.format(new Date(value));
+}
+
 function AdminCreatePortal({
+  adminHistory,
   initialTemplate,
+  section,
 }: {
+  adminHistory: AdminHistoryItem[];
   initialTemplate?: {
     title: string;
     entrants: Array<{ name: string; imageUrl?: string }>;
@@ -16,7 +36,10 @@ function AdminCreatePortal({
     seedingMode: "manual" | "random";
     sourceTitle?: string;
   } | null;
+  section: "create" | "history";
 }) {
+  const showingHistory = section === "history";
+
   return (
     <main className="bw-admin-app">
       <nav className="bw-admin-nav" aria-label="Admin">
@@ -28,10 +51,10 @@ function AdminCreatePortal({
           <Link className="bw-nav-tab" href="/admin">
             Live
           </Link>
-          <Link className="bw-nav-tab active" href="/admin">
+          <Link className={`bw-nav-tab ${!showingHistory ? "active" : ""}`} href="/admin">
             + New Tournament
           </Link>
-          <Link className="bw-nav-tab" href="/admin">
+          <Link className={`bw-nav-tab ${showingHistory ? "active" : ""}`} href="/admin?section=history">
             History
           </Link>
         </div>
@@ -54,20 +77,46 @@ function AdminCreatePortal({
           </Link>
 
           <div className="bw-sidebar-label">Setup</div>
-          <Link className="bw-sidebar-link active" href="/admin">
+          <Link className={`bw-sidebar-link ${!showingHistory ? "active" : ""}`} href="/admin">
             New Tournament
           </Link>
-          <Link className="bw-sidebar-link" href="/admin">
+          <Link className={`bw-sidebar-link ${showingHistory ? "active" : ""}`} href="/admin?section=history">
             Past Tournaments
           </Link>
         </aside>
 
         <section className="bw-admin-content">
-          <div className="bw-section-panel active">
-            <div className="bw-panel-title">New Tournament</div>
-            <p className="bw-panel-sub">Set up a fresh bracket. Once created, share the player link.</p>
-            <CreateBracketForm variant="admin" initialTemplate={initialTemplate} />
-          </div>
+          {showingHistory ? (
+            <div className="bw-section-panel active">
+              <div className="bw-panel-title">Past Tournaments</div>
+              <p className="bw-panel-sub">Every debate that has been settled.</p>
+              {adminHistory.length ? (
+                adminHistory.map((item, index) => (
+                  <div className="bw-history-item" key={item.id}>
+                    <div>
+                      <div className="bw-history-num">Tournament #{adminHistory.length - index}</div>
+                      <div className="bw-history-topic">{item.title}</div>
+                      <div className="bw-history-winner">Champion: {item.winnerName}</div>
+                    </div>
+                    <div className="bw-history-meta">
+                      <div>{formatAdminDate(item.tournamentDate)}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="bw-card">
+                  <div className="bw-card-title">No completed tournaments yet</div>
+                  <p className="bw-muted">Previous winners will show up here once you finish a bracket.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bw-section-panel active">
+              <div className="bw-panel-title">New Tournament</div>
+              <p className="bw-panel-sub">Set up a fresh bracket. Once created, share the player link.</p>
+              <CreateBracketForm variant="admin" initialTemplate={initialTemplate} />
+            </div>
+          )}
         </section>
       </div>
     </main>
@@ -77,7 +126,7 @@ function AdminCreatePortal({
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ adminToken?: string; template?: string }>;
+  searchParams: Promise<{ adminToken?: string; template?: string; section?: string }>;
 }) {
   const params = await searchParams;
   const authorizedAdmin = params.adminToken ? await findBracketByAdminToken(params.adminToken) : null;
@@ -99,6 +148,7 @@ export default async function AdminPage({
 
   return (
     <AdminCreatePortal
+      adminHistory={await listBracketHistory()}
       initialTemplate={
         templateBracket
           ? {
@@ -115,6 +165,7 @@ export default async function AdminPage({
             }
           : null
       }
+      section={params.section === "history" ? "history" : "create"}
     />
   );
 }
