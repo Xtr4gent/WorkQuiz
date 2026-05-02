@@ -895,7 +895,7 @@ export function BracketClient({
                   <div className="bw-history-winner">Champion: {item.winnerName}</div>
                 </div>
                 <div className="bw-history-meta">
-                  <div>{formatEasternDateTime(item.completedAt)}</div>
+                  <div>{formatEasternDateTime(item.tournamentDate)}</div>
                   {reuseTemplateBase ? (
                     <a href={`${reuseTemplateBase}&template=${encodeURIComponent(item.id)}`}>
                       Reuse topic

@@ -18,6 +18,7 @@ export async function GET() {
   const history = (await listBracketHistory(6)).map((item) => ({
     topic: item.title,
     winner: item.winnerName,
+    tournamentDate: item.tournamentDate,
     runners: item.entrantNames,
   }));
 

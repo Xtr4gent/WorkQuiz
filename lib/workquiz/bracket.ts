@@ -76,14 +76,9 @@ function winnerNameForBracket(bracket: BracketRecord) {
   return bracket.entrants.find((entrant) => entrant.id === winnerEntrantId)?.name ?? null;
 }
 
-async function buildAdminHistory(activeBracketId?: string): Promise<AdminHistoryItem[]> {
+async function buildAdminHistory(): Promise<AdminHistoryItem[]> {
   return (await readStore())
     .brackets
-    .filter(
-      (bracket) =>
-        bracket.id !== activeBracketId &&
-        (bracket.status === "completed" || bracket.status === "disabled"),
-    )
     .map((bracket) => {
       const winnerName = winnerNameForBracket(bracket);
       if (!winnerName) {
@@ -94,6 +89,7 @@ async function buildAdminHistory(activeBracketId?: string): Promise<AdminHistory
         id: bracket.id,
         title: bracket.title,
         winnerName,
+        tournamentDate: bracket.rounds[0]?.startsAt ?? bracket.publishedAt,
         completedAt: bracket.rounds.at(-1)?.endsAt ?? bracket.publishedAt,
         entrantNames: bracket.entrants.map((entrant) => entrant.name),
         rosterMemberNames: bracket.rosterMembers.map((member) => member.name),
@@ -101,7 +97,7 @@ async function buildAdminHistory(activeBracketId?: string): Promise<AdminHistory
       };
     })
     .filter((item): item is AdminHistoryItem => item !== null)
-    .sort((left, right) => new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime());
+    .sort((left, right) => new Date(right.tournamentDate).getTime() - new Date(left.tournamentDate).getTime());
 }
 
 export async function listBracketHistory(limit?: number) {
@@ -795,7 +791,7 @@ export async function buildAdminSnapshot(bracket: BracketRecord, adminToken: str
   return buildSnapshot(bracket, {
     includeAdminUrl: true,
     adminToken,
-    adminHistory: await buildAdminHistory(bracket.id),
+    adminHistory: await buildAdminHistory(),
   });
 }
 

@@ -500,9 +500,10 @@ test("admin snapshot includes previous completed topics and winners", async () =
   assert.equal(snapshot.adminHistory?.length, 1);
   assert.equal(snapshot.adminHistory?.[0].title, "Previous Bracket");
   assert.equal(snapshot.adminHistory?.[0].winnerName, "Kit Kat");
+  assert.equal(snapshot.adminHistory?.[0].tournamentDate, previous.rounds[0].startsAt);
 });
 
-test("listBracketHistory returns only real finished brackets in newest-first order", async () => {
+test("listBracketHistory returns championed brackets in newest-first tournament date order", async () => {
   await resetStore();
 
   const { bracket: liveBracket } = await createBracket({
@@ -551,14 +552,20 @@ test("listBracketHistory returns only real finished brackets in newest-first ord
 
   const storedLive = store.brackets.find((entry) => entry.id === liveBracket.id)!;
   storedLive.publishedAt = new Date().toISOString();
+  storedLive.rounds[0].matchups[0].winnerEntrantId = storedLive.rounds[0].matchups[0].entrantAId;
+  storedLive.rounds[0].matchups[0].status = "closed";
+  storedLive.rounds[0].status = "closed";
   await writeStore(store);
 
   const history = await listBracketHistory();
 
-  assert.equal(history.length, 2);
-  assert.equal(history[0].title, "Best Soda");
-  assert.equal(history[0].winnerName, "Pepsi");
-  assert.equal(history[1].title, "Best Chocolate Bar");
+  assert.equal(history.length, 3);
+  assert.equal(history[0].title, "Still Live");
+  assert.equal(history[0].winnerName, "Mars");
+  assert.equal(history[0].tournamentDate, storedLive.rounds[0].startsAt);
+  assert.equal(history[1].title, "Best Soda");
+  assert.equal(history[1].winnerName, "Pepsi");
+  assert.equal(history[2].title, "Best Chocolate Bar");
 });
 
 test("admin auth session token matches the configured env credentials", async () => {

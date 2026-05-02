@@ -92,6 +92,7 @@ export interface AdminHistoryItem {
   id: string;
   title: string;
   winnerName: string;
+  tournamentDate: string;
   completedAt: string;
   entrantNames: string[];
   rosterMemberNames: string[];

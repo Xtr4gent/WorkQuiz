@@ -28,6 +28,16 @@ const STEPS = [
   },
 ];
 
+const tournamentDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function formatTournamentDate(value: string) {
+  return tournamentDateFormatter.format(new Date(value));
+}
+
 type LandingPageClientProps = {
   initialIsLive: boolean;
   pastTopics: AdminHistoryItem[];
@@ -223,7 +233,7 @@ export default function LandingPageClient({
                 style={{ transitionDelay: `${index * 0.08}s` }}
               >
                 <span className="eyebrow lp-topic-card__eyebrow">
-                  Tournament #{pastTopics.length - index}
+                  Tournament #{pastTopics.length - index} · {formatTournamentDate(topic.tournamentDate)}
                 </span>
                 <p className="lp-topic-card__topic">{topic.title}</p>
                 <p className="eyebrow lp-topic-card__champion-label">Champion</p>
