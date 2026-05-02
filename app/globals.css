@@ -1455,6 +1455,21 @@ button {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+.bw-vote-card-media {
+  width: min(100%, 260px);
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--bw-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.bw-vote-card-media,
+.bw-b-entry-thumb {
+  background-position: center;
+  background-size: cover;
+}
+
 .bw-vote-card.voted-win .bw-vote-card-check,
 .bw-vote-card.is-selected .bw-vote-card-check {
   opacity: 1;
@@ -1716,6 +1731,15 @@ button {
   padding: 0 10px;
 }
 
+.bw-b-entry-thumb {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .bw-b-entry:last-child {
   border-bottom: 0;
 }
@@ -1950,6 +1974,35 @@ button {
 
 .bw-card.is-dimmed {
   opacity: 0.68;
+}
+
+.bw-tie-panel {
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(255, 58, 58, 0.3);
+  border-radius: 18px;
+  background: rgba(255, 58, 58, 0.08);
+  margin-bottom: 20px;
+  padding: 22px;
+}
+
+.bw-tie-list {
+  display: grid;
+  gap: 14px;
+}
+
+.bw-tie-card {
+  border: 1px solid var(--bw-border);
+  border-radius: 14px;
+  background: var(--bw-card);
+  padding: 18px;
+}
+
+.bw-tie-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .bw-card-title,
@@ -2285,6 +2338,17 @@ button {
   font-size: 12px;
   font-weight: 600;
   padding: 5px 9px;
+}
+
+.bw-contender-chip-media {
+  border-radius: 999px;
+  background: rgba(200, 245, 60, 0.12);
+  color: var(--bw-lime);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-left: 6px;
+  padding: 2px 6px;
+  text-transform: uppercase;
 }
 
 .bw-seed-list {

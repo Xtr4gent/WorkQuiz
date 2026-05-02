@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { BracketSnapshot, SeedingMode } from "@/lib/workquiz/types";
-import { parseEntrantsFromText } from "@/lib/workquiz/utils";
+import type { BracketSnapshot, EntrantInput, SeedingMode } from "@/lib/workquiz/types";
+import { parseContendersFromText, parseEntrantsFromText } from "@/lib/workquiz/utils";
 
 const LAST_ROSTER_STORAGE_KEY = "workquiz:last-admin-roster";
 const LAST_TITLE_STORAGE_KEY = "workquiz:last-admin-title";
@@ -74,14 +74,14 @@ function getRoundWindowForLocalDate(value: string) {
   };
 }
 
-function move(items: string[], from: number, to: number) {
+function moveContenders<T>(items: T[], from: number, to: number) {
   const next = [...items];
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
 }
 
-function shufflePreview(items: string[]) {
+function shufflePreview<T>(items: T[]) {
   const next = [...items];
   for (let index = next.length - 1; index > 0; index -= 1) {
     const swap = Math.floor(Math.random() * (index + 1));
@@ -90,13 +90,27 @@ function shufflePreview(items: string[]) {
   return next;
 }
 
+function contenderName(contender: EntrantInput) {
+  return typeof contender === "string" ? contender : contender.name;
+}
+
+function contenderImageUrl(contender: EntrantInput) {
+  return typeof contender === "string" ? undefined : contender.imageUrl;
+}
+
+function contenderLine(contender: EntrantInput) {
+  const name = contenderName(contender);
+  const imageUrl = contenderImageUrl(contender);
+  return imageUrl ? `${name} | ${imageUrl}` : name;
+}
+
 export function CreateBracketForm({
   initialTemplate,
   variant = "setup",
 }: {
   initialTemplate?: {
     title: string;
-    entrants: string[];
+    entrants: EntrantInput[];
     rosterMembers: string[];
     seedingMode: SeedingMode;
     sourceTitle?: string;
@@ -106,7 +120,9 @@ export function CreateBracketForm({
   const router = useRouter();
   const defaultRoundStart = useMemo(() => getNextSixAmRoundStart(), []);
   const [title, setTitle] = useState(initialTemplate?.title ?? DEFAULT_TITLE);
-  const [entrantsText, setEntrantsText] = useState(initialTemplate?.entrants.join("\n") ?? DEFAULT_ENTRANTS);
+  const [entrantsText, setEntrantsText] = useState(
+    initialTemplate?.entrants.map(contenderLine).join("\n") ?? DEFAULT_ENTRANTS,
+  );
   const [rosterText, setRosterText] = useState(
     initialTemplate?.rosterMembers.join("\n") ?? DEFAULT_ROSTER,
   );
@@ -114,10 +130,10 @@ export function CreateBracketForm({
   const [roundDate, setRoundDate] = useState(() => toLocalDateValue(defaultRoundStart));
   const [startsAt, setStartsAt] = useState(() => toLocalDateTimeValue(defaultRoundStart));
   const [endsAt, setEndsAt] = useState(() => toLocalDateTimeValue(getSameDayEightPm(defaultRoundStart)));
-  const [previewSeededEntrants, setPreviewSeededEntrants] = useState<string[]>(() =>
+  const [previewSeededEntrants, setPreviewSeededEntrants] = useState<EntrantInput[]>(() =>
     initialTemplate?.seedingMode === "random"
       ? shufflePreview(initialTemplate.entrants)
-      : initialTemplate?.entrants ?? parseEntrantsFromText(entrantsText),
+      : initialTemplate?.entrants ?? parseContendersFromText(entrantsText),
   );
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -126,7 +142,17 @@ export function CreateBracketForm({
   const [isPending, startTransition] = useTransition();
   const [isStorageReady, setIsStorageReady] = useState(Boolean(initialTemplate));
 
-  const entrants = useMemo(() => parseEntrantsFromText(entrantsText), [entrantsText]);
+  const contenderParse = useMemo(() => {
+    try {
+      return { entrants: parseContendersFromText(entrantsText), error: null };
+    } catch (error) {
+      return {
+        entrants: [] as EntrantInput[],
+        error: error instanceof Error ? error.message : "Invalid contender list.",
+      };
+    }
+  }, [entrantsText]);
+  const entrants = contenderParse.entrants;
   const rosterMembers = useMemo(() => parseEntrantsFromText(rosterText), [rosterText]);
   const previewIsValid = useMemo(() => {
     const startsAtIso = new Date(startsAt).toISOString();
@@ -134,6 +160,7 @@ export function CreateBracketForm({
 
     return (
       !!title.trim() &&
+      !contenderParse.error &&
       entrants.length >= 2 &&
       rosterMembers.length >= 2 &&
       !Number.isNaN(new Date(startsAtIso).getTime()) &&
@@ -141,7 +168,7 @@ export function CreateBracketForm({
       new Date(endsAtIso).getTime() > new Date(startsAtIso).getTime() &&
       new Set(rosterMembers.map((member) => member.toLowerCase())).size === rosterMembers.length
     );
-  }, [endsAt, entrants.length, rosterMembers, startsAt, title]);
+  }, [contenderParse.error, endsAt, entrants.length, rosterMembers, startsAt, title]);
 
   useEffect(() => {
     if (variant === "admin") {
@@ -211,9 +238,13 @@ export function CreateBracketForm({
       }
 
       if (rememberedEntrants?.trim()) {
-        const nextEntrants = parseEntrantsFromText(rememberedEntrants);
-        setEntrantsText(rememberedEntrants);
-        setPreviewSeededEntrants(nextEntrants);
+        try {
+          const nextEntrants = parseContendersFromText(rememberedEntrants);
+          setEntrantsText(rememberedEntrants);
+          setPreviewSeededEntrants(nextEntrants);
+        } catch {
+          window.localStorage.removeItem(LAST_ENTRANTS_STORAGE_KEY);
+        }
       }
 
       if (rememberedRoster?.trim()) {
@@ -237,8 +268,8 @@ export function CreateBracketForm({
     window.localStorage.setItem(LAST_ROSTER_STORAGE_KEY, rosterText);
   }, [entrantsText, isStorageReady, rosterText, title]);
 
-  function updateEntrants(next: string[]) {
-    setEntrantsText(next.join("\n"));
+  function updateEntrants(next: EntrantInput[]) {
+    setEntrantsText(next.map(contenderLine).join("\n"));
     setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(next) : next);
   }
 
@@ -248,8 +279,12 @@ export function CreateBracketForm({
 
   function handleEntrantsTextChange(value: string) {
     setEntrantsText(value);
-    const nextEntrants = parseEntrantsFromText(value);
-    setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(nextEntrants) : nextEntrants);
+    try {
+      const nextEntrants = parseContendersFromText(value);
+      setPreviewSeededEntrants(seedingMode === "random" ? shufflePreview(nextEntrants) : nextEntrants);
+    } catch {
+      setPreviewSeededEntrants([]);
+    }
   }
 
   function handleRosterTextChange(value: string) {
@@ -379,22 +414,25 @@ export function CreateBracketForm({
           <label className="bw-field">
             <span>Paste your list</span>
             <textarea
-              placeholder="One per line"
+              placeholder={"One per line, or Name | https://image-url"}
               rows={10}
               value={entrantsText}
               onChange={(event) => handleEntrantsTextChange(event.target.value)}
             />
             <small>
-              {entrants.length} contender{entrants.length === 1 ? "" : "s"} ready. Byes are handled automatically.
+              {entrants.length} contender{entrants.length === 1 ? "" : "s"} ready. Add optional pictures with{" "}
+              <code>Name | https://image-url</code>.
             </small>
           </label>
+          {contenderParse.error ? <p className="bw-error-text">{contenderParse.error}</p> : null}
           {entrants.length ? (
             <div className="bw-contender-preview">
               <span className="bw-card-label">Preview</span>
               <div className="bw-contender-chips">
                 {entrants.slice(0, 32).map((entrant, index) => (
-                  <span className="bw-contender-chip" key={`${entrant}-${index}`}>
-                    {entrant}
+                  <span className="bw-contender-chip" key={`${contenderName(entrant)}-${index}`}>
+                    {contenderName(entrant)}
+                    {contenderImageUrl(entrant) ? <span className="bw-contender-chip-media">image</span> : null}
                   </span>
                 ))}
               </div>
@@ -407,13 +445,13 @@ export function CreateBracketForm({
             <div className="bw-card-title">Seed Preview</div>
             <div className="bw-seed-list">
               {entrants.map((entrant, index) => (
-                <div className="bw-seed-item" key={`${entrant}-${index}`}>
+                <div className="bw-seed-item" key={`${contenderName(entrant)}-${index}`}>
                   <strong>#{index + 1}</strong>
-                  <span>{entrant}</span>
+                  <span>{contenderName(entrant)}</span>
                   <div className="bw-seed-actions">
                     <button
                       disabled={index === 0}
-                      onClick={() => updateEntrants(move(entrants, index, Math.max(0, index - 1)))}
+                      onClick={() => updateEntrants(moveContenders(entrants, index, Math.max(0, index - 1)))}
                       type="button"
                     >
                       Up
@@ -421,7 +459,7 @@ export function CreateBracketForm({
                     <button
                       disabled={index === entrants.length - 1}
                       onClick={() =>
-                        updateEntrants(move(entrants, index, Math.min(entrants.length - 1, index + 1)))
+                        updateEntrants(moveContenders(entrants, index, Math.min(entrants.length - 1, index + 1)))
                       }
                       type="button"
                     >
@@ -501,7 +539,9 @@ export function CreateBracketForm({
           value={entrantsText}
           onChange={(event) => handleEntrantsTextChange(event.target.value)}
         />
+        <span className="muted">Add optional pictures with `Name | https://image-url`.</span>
       </label>
+      {contenderParse.error ? <p className="error-text">{contenderParse.error}</p> : null}
 
       <label className="field">
         <span>Team roster, one person per line</span>
@@ -543,13 +583,13 @@ export function CreateBracketForm({
           </div>
           <div className="seed-list">
             {entrants.map((entrant, index) => (
-              <div className="seed-item" key={`${entrant}-${index}`}>
+              <div className="seed-item" key={`${contenderName(entrant)}-${index}`}>
                 <strong>#{index + 1}</strong>
-                <span>{entrant}</span>
+                <span>{contenderName(entrant)}</span>
                 <div className="seed-actions">
                   <button
                     disabled={index === 0}
-                    onClick={() => updateEntrants(move(entrants, index, Math.max(0, index - 1)))}
+                    onClick={() => updateEntrants(moveContenders(entrants, index, Math.max(0, index - 1)))}
                     type="button"
                   >
                     Up
@@ -557,7 +597,7 @@ export function CreateBracketForm({
                   <button
                     disabled={index === entrants.length - 1}
                     onClick={() =>
-                      updateEntrants(move(entrants, index, Math.min(entrants.length - 1, index + 1)))
+                      updateEntrants(moveContenders(entrants, index, Math.min(entrants.length - 1, index + 1)))
                     }
                     type="button"
                   >

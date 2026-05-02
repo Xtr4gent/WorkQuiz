@@ -11,7 +11,7 @@ function AdminCreatePortal({
 }: {
   initialTemplate?: {
     title: string;
-    entrants: string[];
+    entrants: Array<{ name: string; imageUrl?: string }>;
     rosterMembers: string[];
     seedingMode: "manual" | "random";
     sourceTitle?: string;
@@ -103,7 +103,10 @@ export default async function AdminPage({
         templateBracket
           ? {
               title: templateBracket.title,
-              entrants: templateBracket.entrants.map((entrant) => entrant.name),
+              entrants: templateBracket.entrants.map((entrant) => ({
+                name: entrant.name,
+                imageUrl: entrant.imageUrl,
+              })),
               rosterMembers:
                 templateBracket.rosterMembers?.map((member) => member.name) ??
                 Array.from({ length: templateBracket.totalPlayers }, (_, index) => `Player ${index + 1}`),

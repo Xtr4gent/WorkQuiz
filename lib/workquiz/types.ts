@@ -1,12 +1,20 @@
 export type SeedingMode = "manual" | "random";
 export type BracketStatus = "draft" | "live" | "completed" | "disabled";
-export type RoundStatus = "upcoming" | "live" | "closed";
-export type MatchupStatus = "pending" | "live" | "closed";
+export type RoundStatus = "upcoming" | "live" | "tiebreaker" | "closed";
+export type MatchupStatus = "pending" | "live" | "needs_tiebreaker" | "closed";
+
+export type EntrantInput =
+  | string
+  | {
+      name: string;
+      imageUrl?: string;
+    };
 
 export interface EntrantRecord {
   id: string;
   name: string;
   seed: number;
+  imageUrl?: string;
 }
 
 export interface RosterMemberRecord {
@@ -70,9 +78,9 @@ export interface StoreShape {
 export interface CreateBracketInput {
   title: string;
   seedingMode: SeedingMode;
-  entrants: string[];
+  entrants: EntrantInput[];
   rosterMembers: string[];
-  seededEntrants?: string[];
+  seededEntrants?: EntrantInput[];
   startsAt: string;
   endsAt?: string;
   totalPlayers: number;
@@ -94,6 +102,7 @@ export interface BracketSnapshotEntrant {
   id: string;
   name: string;
   seed: number;
+  imageUrl?: string;
 }
 
 export interface BracketSnapshotRosterMember {

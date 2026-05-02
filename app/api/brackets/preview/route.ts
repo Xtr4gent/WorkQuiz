@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 
 import { buildPreviewSnapshot } from "@/lib/workquiz/bracket";
 import { DEFAULT_ROUND_DURATION_HOURS } from "@/lib/workquiz/constants";
-import { parseEntrantsFromText } from "@/lib/workquiz/utils";
+import type { EntrantInput } from "@/lib/workquiz/types";
+import { normalizeContenderInputs, parseContendersFromText } from "@/lib/workquiz/utils";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     title?: string;
-    entrants?: string[];
+    entrants?: EntrantInput[];
     rosterMembers?: string[];
-    seededEntrants?: string[];
+    seededEntrants?: EntrantInput[];
     entrantsText?: string;
     seedingMode?: "manual" | "random";
     startsAt?: string;
@@ -17,9 +18,19 @@ export async function POST(request: Request) {
     roundDurationHours?: number;
   };
 
-  const entrants = body.entrants?.length
-    ? body.entrants
-    : parseEntrantsFromText(body.entrantsText ?? "");
+  let entrants: ReturnType<typeof normalizeContenderInputs>;
+  let seededEntrants: ReturnType<typeof normalizeContenderInputs> | undefined;
+  try {
+    entrants = body.entrants?.length
+      ? normalizeContenderInputs(body.entrants)
+      : parseContendersFromText(body.entrantsText ?? "");
+    seededEntrants = body.seededEntrants?.length ? normalizeContenderInputs(body.seededEntrants) : undefined;
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Invalid contender list." },
+      { status: 400 },
+    );
+  }
   const rosterMembers = body.rosterMembers?.length ? body.rosterMembers : [];
 
   if (!body.title?.trim()) {
@@ -59,7 +70,7 @@ export async function POST(request: Request) {
       title: body.title.trim(),
       entrants,
       rosterMembers,
-      seededEntrants: body.seededEntrants,
+      seededEntrants,
       seedingMode: body.seedingMode ?? "manual",
       startsAt: body.startsAt ?? new Date().toISOString(),
       endsAt: body.endsAt,

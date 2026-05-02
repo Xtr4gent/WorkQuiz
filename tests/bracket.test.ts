@@ -13,6 +13,7 @@ import {
   findCurrentPublicBracket,
   listBracketHistory,
   markBracketAsCurrentPublic,
+  resolveTieBreaker,
   restartBracket,
 } from "@/lib/workquiz/bracket";
 import { GET as getStatusRoute } from "@/app/api/status/route";
@@ -39,7 +40,12 @@ test("createBracket builds the bracket and returns an admin token", async () => 
   const { bracket, adminToken } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
-    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    entrants: [
+      { name: "Mars", imageUrl: "https://example.com/mars.jpg" },
+      "Twix",
+      "Kit Kat",
+      "Aero",
+    ],
     rosterMembers: roster,
     startsAt,
     endsAt,
@@ -51,6 +57,7 @@ test("createBracket builds the bracket and returns an admin token", async () => 
   assert.ok(adminToken.length > 10);
   assert.equal(bracket.rosterMembers.length, roster.length);
   assert.equal(bracket.totalPlayers, roster.length);
+  assert.equal(bracket.entrants[0].imageUrl, "https://example.com/mars.jpg");
 });
 
 test("castVote rejects duplicate votes from the same roster member in a matchup", async () => {
@@ -85,10 +92,10 @@ test("castVote rejects duplicate votes from the same roster member in a matchup"
   );
 });
 
-test("advanceBracket picks the higher seed on non-final ties and creates a final revote", async () => {
+test("advanceBracket pauses tied matchups until the admin resolves the tie breaker", async () => {
   await resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const { bracket } = await createBracket({
+  const { bracket, adminToken } = await createBracket({
     title: "Chocolate Bar Showdown",
     seedingMode: "manual",
     entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
@@ -101,44 +108,41 @@ test("advanceBracket picks the higher seed on non-final ties and creates a final
   const semiA = bracket.rounds[0].matchups[0];
   const semiB = bracket.rounds[0].matchups[1];
 
-  await castVote({
+  let updated = await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantAId!,
     rosterMemberId: bracket.rosterMembers[0].id,
   });
-  await castVote({
+  updated = await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiA.id,
     entrantId: semiA.entrantBId!,
     rosterMemberId: bracket.rosterMembers[1].id,
   });
-  await castVote({
+  updated = await castVote({
     publicToken: bracket.publicToken,
     matchupId: semiB.id,
     entrantId: semiB.entrantAId!,
     rosterMemberId: bracket.rosterMembers[2].id,
   });
 
-  advanceBracket(bracket, new Date(Date.now() + 60 * 60 * 1000));
+  advanceBracket(updated, new Date(Date.now() + 60 * 60 * 1000));
+  await writeStore({ brackets: [updated] });
 
-  const final = bracket.rounds[1].matchups[0];
-  final.votes.push({
-    id: "vote-1",
-    rosterMemberId: bracket.rosterMembers[0].id,
-    entrantId: final.entrantAId!,
-    createdAt: new Date().toISOString(),
-  });
-  final.votes.push({
-    id: "vote-2",
-    rosterMemberId: bracket.rosterMembers[1].id,
-    entrantId: final.entrantBId!,
-    createdAt: new Date().toISOString(),
+  assert.equal(updated.rounds[0].status, "tiebreaker");
+  assert.equal(updated.rounds[0].matchups[0].status, "needs_tiebreaker");
+  assert.equal(updated.rounds[1].matchups[0].entrantBId, semiB.entrantAId);
+
+  const resolved = await resolveTieBreaker({
+    adminToken,
+    matchupId: semiA.id,
+    winnerEntrantId: semiA.entrantBId!,
   });
 
-  advanceBracket(bracket, new Date(Date.now() + 3 * 60 * 60 * 1000));
-
-  assert.equal(bracket.rounds.at(-1)?.label, "Final Revote");
+  assert.equal(resolved.rounds[0].status, "closed");
+  assert.equal(resolved.rounds[0].matchups[0].winnerEntrantId, semiA.entrantBId);
+  assert.equal(resolved.rounds[1].matchups[0].entrantAId, semiA.entrantBId);
 });
 
 test("buildSnapshot marks a roster member green only after finishing the whole current round", async () => {
@@ -233,17 +237,30 @@ test("daily round windows wait overnight before opening the next round", async (
     endsAt: "2026-04-21T00:00:00.000Z",
     totalPlayers: roster.length,
   });
+  const updated = bracket;
+  updated.rounds[0].matchups[0].votes.push({
+    id: "vote-1",
+    rosterMemberId: bracket.rosterMembers[0].id,
+    entrantId: bracket.rounds[0].matchups[0].entrantAId!,
+    createdAt: "2026-04-20T12:00:00.000Z",
+  });
+  updated.rounds[0].matchups[1].votes.push({
+    id: "vote-2",
+    rosterMemberId: bracket.rosterMembers[1].id,
+    entrantId: bracket.rounds[0].matchups[1].entrantAId!,
+    createdAt: "2026-04-20T12:05:00.000Z",
+  });
 
-  advanceBracket(bracket, new Date("2026-04-21T01:00:00.000Z"));
+  advanceBracket(updated, new Date("2026-04-21T01:00:00.000Z"));
 
-  assert.equal(bracket.rounds[0].status, "closed");
-  assert.equal(bracket.rounds[1].status, "upcoming");
-  assert.equal(bracket.rounds[1].matchups[0].status, "pending");
+  assert.equal(updated.rounds[0].status, "closed");
+  assert.equal(updated.rounds[1].status, "upcoming");
+  assert.equal(updated.rounds[1].matchups[0].status, "pending");
 
-  advanceBracket(bracket, new Date("2026-04-21T10:00:00.000Z"));
+  advanceBracket(updated, new Date("2026-04-21T10:00:00.000Z"));
 
-  assert.equal(bracket.rounds[1].status, "live");
-  assert.equal(bracket.rounds[1].matchups[0].status, "live");
+  assert.equal(updated.rounds[1].status, "live");
+  assert.equal(updated.rounds[1].matchups[0].status, "live");
 });
 
 test("restartBracket clears votes and sends the bracket back to round one", async () => {
@@ -381,9 +398,19 @@ test("buildPreviewSnapshot preserves a provided random preview seed order", asyn
   await resetStore();
   const snapshot = buildPreviewSnapshot({
     title: "Chocolate Bar Showdown",
-    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    entrants: [
+      { name: "Mars", imageUrl: "https://example.com/mars.jpg" },
+      "Twix",
+      "Kit Kat",
+      "Aero",
+    ],
     rosterMembers: roster,
-    seededEntrants: ["Aero", "Twix", "Mars", "Kit Kat"],
+    seededEntrants: [
+      "Aero",
+      "Twix",
+      { name: "Mars", imageUrl: "https://example.com/mars.jpg" },
+      "Kit Kat",
+    ],
     seedingMode: "random",
     startsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
@@ -392,7 +419,50 @@ test("buildPreviewSnapshot preserves a provided random preview seed order", asyn
 
   assert.equal(snapshot.entrants[0].name, "Aero");
   assert.equal(snapshot.rounds[0].matchups[0].entrantA?.name, "Aero");
+  assert.equal(snapshot.entrants[2].imageUrl, "https://example.com/mars.jpg");
   assert.equal(snapshot.rosterMembers.length, roster.length);
+});
+
+test("final ties wait for admin tie-breaker choice before crowning a champion", async () => {
+  await resetStore();
+  const { bracket, adminToken } = await createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const final = bracket.rounds[0].matchups[0];
+  let updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: final.id,
+    entrantId: final.entrantAId!,
+    rosterMemberId: bracket.rosterMembers[0].id,
+  });
+  updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: final.id,
+    entrantId: final.entrantBId!,
+    rosterMemberId: bracket.rosterMembers[1].id,
+  });
+
+  advanceBracket(updated, new Date(Date.now() + 60 * 60 * 1000));
+  await writeStore({ brackets: [updated] });
+
+  assert.equal(updated.status, "live");
+  assert.equal(updated.rounds[0].status, "tiebreaker");
+
+  const resolved = await resolveTieBreaker({
+    adminToken,
+    matchupId: final.id,
+    winnerEntrantId: final.entrantBId!,
+  });
+
+  assert.equal(resolved.status, "completed");
+  assert.equal(resolved.rounds[0].matchups[0].winnerEntrantId, final.entrantBId);
 });
 
 test("admin snapshot includes previous completed topics and winners", async () => {

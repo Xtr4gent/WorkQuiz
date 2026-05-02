@@ -25,6 +25,7 @@ import {
   hashValue,
   isoDate,
   nextPowerOfTwo,
+  normalizeContenderInputs,
   shuffle,
   slugify,
 } from "@/lib/workquiz/utils";
@@ -251,17 +252,23 @@ export function resolveAutomaticWinners(bracket: BracketRecord) {
 }
 
 export async function createBracket(input: CreateBracketInput) {
+  const normalizedEntrants = normalizeContenderInputs(input.entrants);
+  const normalizedSeededEntrants =
+    input.seededEntrants?.length === normalizedEntrants.length
+      ? normalizeContenderInputs(input.seededEntrants)
+      : null;
   const sourceEntrants =
-    input.seededEntrants?.length === input.entrants.length
-      ? input.seededEntrants
+    normalizedSeededEntrants
+      ? normalizedSeededEntrants
       : input.seedingMode === "random"
-        ? shuffle(input.entrants)
-        : input.entrants;
+        ? shuffle(normalizedEntrants)
+        : normalizedEntrants;
   const roundDurationHours = deriveRoundDurationHours(input);
-  const entrants = sourceEntrants.map<EntrantRecord>((name, index) => ({
+  const entrants = sourceEntrants.map<EntrantRecord>((entrant, index) => ({
     id: nanoid(),
-    name,
+    name: entrant.name,
     seed: index + 1,
+    imageUrl: entrant.imageUrl,
   }));
   const rosterMembers = input.rosterMembers.map<RosterMemberRecord>((name) => ({
     id: nanoid(),
@@ -300,25 +307,30 @@ export async function createBracket(input: CreateBracketInput) {
   return { bracket, adminToken };
 }
 
-function winnerFromSeed(bracket: BracketRecord, matchup: MatchupRecord) {
-  const entrants = entrantMap(bracket);
-
+function winnerFromVotes(matchup: MatchupRecord) {
   if (!matchup.entrantAId || !matchup.entrantBId) {
     return matchup.entrantAId ?? matchup.entrantBId;
   }
 
   const { votesA, votesB } = compareVotes(matchup);
   if (votesA === votesB) {
-    const entrantA = entrants.get(matchup.entrantAId);
-    const entrantB = entrants.get(matchup.entrantBId);
-    if (!entrantA || !entrantB) {
-      throw new Error("Entrant missing.");
-    }
-
-    return entrantA.seed < entrantB.seed ? entrantA.id : entrantB.id;
+    return null;
   }
 
   return votesA > votesB ? matchup.entrantAId : matchup.entrantBId;
+}
+
+function matchupNeedsTieBreaker(matchup: MatchupRecord) {
+  if (!matchup.entrantAId || !matchup.entrantBId) {
+    return false;
+  }
+
+  const { votesA, votesB } = compareVotes(matchup);
+  return votesA === votesB;
+}
+
+function roundIsResolved(round: RoundRecord) {
+  return round.matchups.every((matchup) => matchup.status === "closed" && matchup.winnerEntrantId);
 }
 
 export function advanceBracket(bracket: BracketRecord, now = new Date()) {
@@ -345,8 +357,7 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
       continue;
     }
 
-    round.status = "closed";
-    let finalsRevote = false;
+    let needsTieBreaker = false;
 
     for (const matchup of round.matchups) {
       if (matchup.winnerEntrantId) {
@@ -354,36 +365,14 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
         continue;
       }
 
-      const { votesA, votesB } = compareVotes(matchup);
-      const isFinalRound = roundIndex === bracket.rounds.length - 1;
-
-      if (isFinalRound && matchup.entrantAId && matchup.entrantBId && votesA === votesB) {
-        finalsRevote = true;
-        bracket.rounds.push({
-          id: nanoid(),
-          number: bracket.rounds.length + 1,
-          label: "Final Revote",
-          startsAt: now.toISOString(),
-          endsAt: addHours(now, bracket.revoteDurationHours),
-          status: "live",
-          matchups: [
-            {
-              id: nanoid(),
-              slot: 1,
-              entrantAId: matchup.entrantAId,
-              entrantBId: matchup.entrantBId,
-              winnerEntrantId: null,
-              status: "live",
-              votes: [],
-              updatedAt: now.toISOString(),
-            },
-          ],
-        });
-        matchup.status = "closed";
+      if (matchupNeedsTieBreaker(matchup)) {
+        needsTieBreaker = true;
+        matchup.status = "needs_tiebreaker";
+        matchup.updatedAt = now.toISOString();
         continue;
       }
 
-      const winnerEntrantId = winnerFromSeed(bracket, matchup);
+      const winnerEntrantId = winnerFromVotes(matchup);
       matchup.winnerEntrantId = winnerEntrantId;
       matchup.status = "closed";
 
@@ -392,10 +381,12 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
       }
     }
 
-    if (finalsRevote) {
+    if (needsTieBreaker) {
+      round.status = "tiebreaker";
       continue;
     }
 
+    round.status = "closed";
     const nextRound = bracket.rounds[roundIndex + 1];
     if (nextRound) {
       if (new Date(nextRound.startsAt).getTime() <= now.getTime()) {
@@ -622,6 +613,70 @@ export async function clearMatchupVote(params: {
   return updated;
 }
 
+export async function resolveTieBreaker(params: {
+  adminToken: string;
+  matchupId: string;
+  winnerEntrantId: string;
+}) {
+  let updatedBracketId: string | null = null;
+
+  const updatedStore = await updateStore((store) => {
+    const bracket = store.brackets.find((entry) => entry.adminTokenHash === hashValue(params.adminToken));
+    if (!bracket) {
+      throw new Error("Bracket not found.");
+    }
+
+    let targetRound: RoundRecord | null = null;
+    let targetRoundIndex = -1;
+    let targetMatchup: MatchupRecord | null = null;
+
+    for (const [roundIndex, round] of bracket.rounds.entries()) {
+      const matchup = round.matchups.find((entry) => entry.id === params.matchupId);
+      if (matchup) {
+        targetRound = round;
+        targetRoundIndex = roundIndex;
+        targetMatchup = matchup;
+        break;
+      }
+    }
+
+    if (!targetRound || !targetMatchup) {
+      throw new Error("Matchup not found.");
+    }
+
+    if (targetRound.status !== "tiebreaker" || targetMatchup.status !== "needs_tiebreaker") {
+      throw new Error("This matchup does not need a tie breaker.");
+    }
+
+    if (![targetMatchup.entrantAId, targetMatchup.entrantBId].includes(params.winnerEntrantId)) {
+      throw new Error("Tie-breaker winner must be one of the matchup contenders.");
+    }
+
+    targetMatchup.winnerEntrantId = params.winnerEntrantId;
+    targetMatchup.status = "closed";
+    targetMatchup.updatedAt = new Date().toISOString();
+    setNextRoundParticipant(bracket, targetRoundIndex, targetMatchup.slot, params.winnerEntrantId);
+
+    if (roundIsResolved(targetRound)) {
+      targetRound.status = "closed";
+      resolveAutomaticWinners(bracket);
+      advanceBracket(bracket, new Date());
+    }
+
+    updatedBracketId = bracket.id;
+    return store;
+  });
+
+  const updated = updatedStore.brackets.find((bracket) => bracket.id === updatedBracketId) ?? null;
+  if (!updated) {
+    throw new Error("Bracket not found.");
+  }
+
+  publish(updated.publicToken, { type: "tie-breaker" });
+  schedulePendingRoundStartPings();
+  return updated;
+}
+
 export function buildSnapshot(
   bracket: BracketRecord,
   options?: {
@@ -638,6 +693,7 @@ export function buildSnapshot(
   const rosterMap = new Map(bracket.rosterMembers.map((member) => [member.id, member]));
   const currentRoundRecord =
     bracket.rounds.find((round) => round.status === "live") ??
+    bracket.rounds.find((round) => round.status === "tiebreaker") ??
     bracket.rounds.find((round) => round.status === "upcoming") ??
     null;
   const currentRoundVotingMatchups =
@@ -744,12 +800,17 @@ export async function buildAdminSnapshot(bracket: BracketRecord, adminToken: str
 }
 
 export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot {
+  const normalizedEntrants = normalizeContenderInputs(input.entrants);
+  const normalizedSeededEntrants =
+    input.seededEntrants?.length === normalizedEntrants.length
+      ? normalizeContenderInputs(input.seededEntrants)
+      : null;
   const sourceEntrants =
-    input.seededEntrants?.length === input.entrants.length
-      ? input.seededEntrants
+    normalizedSeededEntrants
+      ? normalizedSeededEntrants
       : input.seedingMode === "random"
-        ? shuffle(input.entrants)
-        : input.entrants;
+        ? shuffle(normalizedEntrants)
+        : normalizedEntrants;
   const previewBracket: BracketRecord = {
     id: `preview-${nanoid(8)}`,
     title: input.title.trim(),
@@ -764,10 +825,11 @@ export function buildPreviewSnapshot(input: CreateBracketInput): BracketSnapshot
     totalPlayers: input.totalPlayers,
     roundDurationHours: deriveRoundDurationHours(input),
     revoteDurationHours: input.revoteDurationHours || DEFAULT_REVOTE_DURATION_HOURS,
-    entrants: sourceEntrants.map<EntrantRecord>((name, index) => ({
+    entrants: sourceEntrants.map<EntrantRecord>((entrant, index) => ({
       id: `preview-entrant-${index + 1}`,
-      name,
+      name: entrant.name,
       seed: index + 1,
+      imageUrl: entrant.imageUrl,
     })),
     rosterMembers: input.rosterMembers.map<RosterMemberRecord>((name, index) => ({
       id: `preview-roster-${index + 1}`,

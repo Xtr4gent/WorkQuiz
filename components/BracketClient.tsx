@@ -68,6 +68,21 @@ function entrantLabel(entrant: BracketSnapshotEntrant | null) {
   return entrant ? entrant.name : "TBD";
 }
 
+function renderEntrantImage(entrant: BracketSnapshotEntrant | null, className: string) {
+  if (!entrant?.imageUrl) {
+    return null;
+  }
+
+  return (
+    <span
+      aria-label={`${entrant.name} option image`}
+      className={className}
+      role="img"
+      style={{ backgroundImage: `url(${entrant.imageUrl})` }}
+    />
+  );
+}
+
 function winnerName(snapshot: BracketSnapshot) {
   const finalRound = snapshot.rounds[snapshot.rounds.length - 1];
   const winnerId = finalRound?.matchups[0]?.winnerEntrantId;
@@ -254,6 +269,13 @@ export function BracketClient({
       };
     }
 
+    if (currentRound.status === "tiebreaker") {
+      return {
+        title: "Tie breaker in progress",
+        body: "Voting is locked while the admin asks an outside person to choose the winner.",
+      };
+    }
+
     if (currentRound.status === "upcoming") {
       return {
         title: `${currentRound.label} has not opened yet`,
@@ -281,6 +303,8 @@ export function BracketClient({
   );
 
   const activeMatchups = currentRound?.matchups.filter((matchup) => matchup.status === "live") ?? [];
+  const tieBreakerMatchups =
+    currentRound?.matchups.filter((matchup) => matchup.status === "needs_tiebreaker") ?? [];
   const primaryMatchup = activeMatchups[0] ?? currentRound?.matchups[0] ?? snapshot.rounds[0]?.matchups[0] ?? null;
   const turnout = percent(snapshot.currentRoundUniqueVoters, snapshot.totalPlayers);
   const pendingRosterCount = Math.max(snapshot.totalPlayers - snapshot.currentRoundUniqueVoters, 0);
@@ -420,6 +444,33 @@ export function BracketClient({
     setSnapshot(result);
   }
 
+  async function resolveTieBreakerNow(
+    matchup: BracketSnapshotMatchup,
+    winner: BracketSnapshotEntrant | null,
+  ) {
+    if (!adminToken || !winner) {
+      return;
+    }
+
+    if (!window.confirm(`Advance ${winner.name} as the tie-breaker winner?`)) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/admin/${adminToken}/ties/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchupId: matchup.id, winnerEntrantId: winner.id }),
+    });
+    const result = (await response.json()) as BracketSnapshot & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "Could not resolve the tie breaker.");
+      return;
+    }
+
+    setSnapshot(result);
+  }
+
   function renderPublicVote(matchup: BracketSnapshotMatchup) {
     const canSeeVoteCounts =
       matchup.status !== "live" ||
@@ -465,6 +516,7 @@ export function BracketClient({
                 type="button"
               >
                 <span className="bw-vote-card-check">✓</span>
+                {renderEntrantImage(entrant, "bw-vote-card-media")}
                 <span className="bw-vote-card-name">{entrantLabel(entrant)}</span>
                 <span className="bw-vote-card-hint">
                   {matchup.voteState.votedEntrantId ? "" : "Tap to vote"}
@@ -536,6 +588,7 @@ export function BracketClient({
                     >
                       <div className={`bw-b-entry ${winnerA ? "winner" : winnerB ? "loser" : ""}`}>
                         <span className="bw-b-seed">{matchup.entrantA?.seed ?? ""}</span>
+                        {renderEntrantImage(matchup.entrantA, "bw-b-entry-thumb")}
                         <span className="bw-b-name">{entrantLabel(matchup.entrantA)}</span>
                         {winnerA ? <span className="bw-b-win-dot" /> : null}
                         {matchup.status === "live" ? <span className="bw-b-live-dot" /> : null}
@@ -543,6 +596,7 @@ export function BracketClient({
                       </div>
                       <div className={`bw-b-entry ${winnerB ? "winner" : winnerA ? "loser" : ""}`}>
                         <span className="bw-b-seed">{matchup.entrantB?.seed ?? ""}</span>
+                        {renderEntrantImage(matchup.entrantB, "bw-b-entry-thumb")}
                         <span className="bw-b-name">{entrantLabel(matchup.entrantB)}</span>
                         {winnerB ? <span className="bw-b-win-dot" /> : null}
                         {matchup.status === "live" ? <span className="bw-b-live-dot" /> : null}
@@ -609,6 +663,49 @@ export function BracketClient({
           </div>
         </div>
       </>
+    );
+  }
+
+  function renderTieBreakerPanel() {
+    if (!tieBreakerMatchups.length) {
+      return null;
+    }
+
+    return (
+      <section className="bw-tie-panel">
+        <div>
+          <div className="bw-panel-title danger">Tie Breaker Needed</div>
+          <p className="bw-panel-sub">
+            Ask your outside person, then choose who should advance. Public voting stays locked until this is resolved.
+          </p>
+        </div>
+        <div className="bw-tie-list">
+          {tieBreakerMatchups.map((matchup) => (
+            <div className="bw-tie-card" key={matchup.id}>
+              <div className="bw-card-title">{matchupTitle(matchup)}</div>
+              {renderResultBars(matchup)}
+              <div className="bw-tie-actions">
+                <button
+                  className="bw-btn bw-btn-lime"
+                  disabled={!matchup.entrantA}
+                  onClick={() => resolveTieBreakerNow(matchup, matchup.entrantA)}
+                  type="button"
+                >
+                  Advance {entrantLabel(matchup.entrantA)}
+                </button>
+                <button
+                  className="bw-btn bw-btn-lime"
+                  disabled={!matchup.entrantB}
+                  onClick={() => resolveTieBreakerNow(matchup, matchup.entrantB)}
+                  type="button"
+                >
+                  Advance {entrantLabel(matchup.entrantB)}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     );
   }
 
@@ -997,6 +1094,7 @@ export function BracketClient({
           </aside>
           <main className="bw-admin-content">
             {error ? <p className="bw-error-text">{error}</p> : null}
+            {renderTieBreakerPanel()}
             {renderAdminSection()}
           </main>
         </div>
