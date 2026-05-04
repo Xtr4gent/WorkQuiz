@@ -197,6 +197,29 @@ function entrantMap(bracket: BracketRecord) {
   return new Map(bracket.entrants.map((entrant) => [entrant.id, entrant]));
 }
 
+function normalizeRosterName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function buildRosterAliasMap(bracket: BracketRecord) {
+  const idsByCanonicalName = new Map<string, Set<string>>();
+
+  for (const member of bracket.rosterMembers) {
+    const key = normalizeRosterName(member.name);
+    const ids = idsByCanonicalName.get(key) ?? new Set<string>();
+    ids.add(member.id);
+    idsByCanonicalName.set(key, ids);
+  }
+
+  const aliasesByMemberId = new Map<string, Set<string>>();
+  for (const member of bracket.rosterMembers) {
+    const key = normalizeRosterName(member.name);
+    aliasesByMemberId.set(member.id, idsByCanonicalName.get(key) ?? new Set([member.id]));
+  }
+
+  return aliasesByMemberId;
+}
+
 function voteCounts(matchup: MatchupRecord) {
   return matchup.votes.reduce<Record<string, number>>((counts, vote) => {
     counts[vote.entrantId] = (counts[vote.entrantId] ?? 0) + 1;
@@ -347,16 +370,88 @@ function roundIsResolved(round: RoundRecord) {
   return round.matchups.every((matchup) => matchup.status === "closed" && matchup.winnerEntrantId);
 }
 
+function repairUnresolvedTieStates(bracket: BracketRecord, now: Date, nowIso: string) {
+  const nowMs = now.getTime();
+
+  for (const round of bracket.rounds) {
+    if (round.status === "upcoming") {
+      continue;
+    }
+
+    const roundHasEnded = new Date(round.endsAt).getTime() <= nowMs;
+    if (!roundHasEnded && round.status === "live") {
+      continue;
+    }
+
+    let hasUnresolvedTie = false;
+    for (const matchup of round.matchups) {
+      if (matchup.winnerEntrantId || !matchupNeedsTieBreaker(matchup)) {
+        continue;
+      }
+
+      hasUnresolvedTie = true;
+      matchup.status = "needs_tiebreaker";
+      matchup.updatedAt = nowIso;
+    }
+
+    if (hasUnresolvedTie) {
+      round.status = "tiebreaker";
+    }
+  }
+}
+
+function roundCanStart(bracket: BracketRecord, roundIndex: number) {
+  if (roundIndex === 0) {
+    return true;
+  }
+
+  const previousRound = bracket.rounds[roundIndex - 1];
+  return previousRound ? roundIsResolved(previousRound) : false;
+}
+
+function resetBlockedRound(round: RoundRecord, nowIso: string) {
+  round.status = "upcoming";
+  delete round.roundStartPingClaimedAt;
+  delete round.roundStartPingedAt;
+
+  for (const matchup of round.matchups) {
+    const changed =
+      matchup.status !== "pending" ||
+      matchup.winnerEntrantId !== null ||
+      matchup.votes.length > 0;
+
+    matchup.status = "pending";
+    matchup.winnerEntrantId = null;
+    matchup.votes = [];
+    if (changed) {
+      matchup.updatedAt = nowIso;
+    }
+  }
+}
+
 export function advanceBracket(bracket: BracketRecord, now = new Date()) {
   if (bracket.status === "disabled") {
     return;
+  }
+
+  const nowIso = now.toISOString();
+  repairUnresolvedTieStates(bracket, now, nowIso);
+  for (let roundIndex = 1; roundIndex < bracket.rounds.length; roundIndex += 1) {
+    const round = bracket.rounds[roundIndex];
+    if (!roundCanStart(bracket, roundIndex)) {
+      resetBlockedRound(round, nowIso);
+    }
   }
 
   for (let roundIndex = 0; roundIndex < bracket.rounds.length; roundIndex += 1) {
     const round = bracket.rounds[roundIndex];
 
     if (round.status !== "live") {
-      if (round.status === "upcoming" && new Date(round.startsAt).getTime() <= now.getTime()) {
+      if (
+        round.status === "upcoming" &&
+        roundCanStart(bracket, roundIndex) &&
+        new Date(round.startsAt).getTime() <= now.getTime()
+      ) {
         round.status = "live";
         for (const matchup of round.matchups) {
           if (matchup.entrantAId && matchup.entrantBId && matchup.status === "pending") {
@@ -382,7 +477,7 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
       if (matchupNeedsTieBreaker(matchup)) {
         needsTieBreaker = true;
         matchup.status = "needs_tiebreaker";
-        matchup.updatedAt = now.toISOString();
+        matchup.updatedAt = nowIso;
         continue;
       }
 
@@ -504,7 +599,9 @@ export async function castVote(params: {
       throw new Error("Select your name before voting.");
     }
 
-    const existingVote = matchup.votes.find((vote) => vote.rosterMemberId === params.rosterMemberId);
+    const rosterAliases = buildRosterAliasMap(bracket);
+    const equivalentRosterIds = rosterAliases.get(params.rosterMemberId) ?? new Set([params.rosterMemberId]);
+    const existingVote = matchup.votes.find((vote) => equivalentRosterIds.has(vote.rosterMemberId));
     if (existingVote) {
       throw new Error("This person already voted in this matchup.");
     }
@@ -667,6 +764,12 @@ export async function resolveTieBreaker(params: {
       throw new Error("Matchup not found.");
     }
 
+    const unresolvedTie = !targetMatchup.winnerEntrantId && matchupNeedsTieBreaker(targetMatchup);
+    if (unresolvedTie) {
+      targetRound.status = "tiebreaker";
+      targetMatchup.status = "needs_tiebreaker";
+    }
+
     if (targetRound.status !== "tiebreaker" || targetMatchup.status !== "needs_tiebreaker") {
       throw new Error("This matchup does not need a tie breaker.");
     }
@@ -715,6 +818,7 @@ export function buildSnapshot(
   const kind = bracketKind(bracket);
   const entrants = entrantMap(bracket);
   const rosterMap = new Map(bracket.rosterMembers.map((member) => [member.id, member]));
+  const rosterAliases = buildRosterAliasMap(bracket);
   const currentRoundRecord =
     bracket.rounds.find((round) => round.status === "live") ??
     bracket.rounds.find((round) => round.status === "tiebreaker") ??
@@ -724,10 +828,11 @@ export function buildSnapshot(
     currentRoundRecord?.matchups.filter((matchup) => matchup.entrantAId && matchup.entrantBId) ?? [];
   const currentRoundRosterStatuses: BracketSnapshotRosterStatus[] = currentRoundRecord
     ? bracket.rosterMembers.map((member) => {
+        const equivalentRosterIds = rosterAliases.get(member.id) ?? new Set([member.id]);
         const hasVoted =
           currentRoundVotingMatchups.length > 0 &&
           currentRoundVotingMatchups.every((matchup) =>
-            matchup.votes.some((vote) => vote.rosterMemberId === member.id),
+            matchup.votes.some((vote) => equivalentRosterIds.has(vote.rosterMemberId)),
           );
 
         return {

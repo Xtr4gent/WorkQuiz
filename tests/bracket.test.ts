@@ -154,6 +154,8 @@ test("advanceBracket pauses tied matchups until the admin resolves the tie break
 
   assert.equal(updated.rounds[0].status, "tiebreaker");
   assert.equal(updated.rounds[0].matchups[0].status, "needs_tiebreaker");
+  assert.equal(updated.rounds[1].status, "upcoming");
+  assert.equal(updated.rounds[1].matchups[0].status, "pending");
   assert.equal(updated.rounds[1].matchups[0].entrantBId, semiB.entrantAId);
 
   const resolved = await resolveTieBreaker({
@@ -165,6 +167,96 @@ test("advanceBracket pauses tied matchups until the admin resolves the tie break
   assert.equal(resolved.rounds[0].status, "closed");
   assert.equal(resolved.rounds[0].matchups[0].winnerEntrantId, semiA.entrantBId);
   assert.equal(resolved.rounds[1].matchups[0].entrantAId, semiA.entrantBId);
+});
+
+test("advanceBracket recovers from a prematurely live next round when ties are unresolved", async () => {
+  await resetStore();
+  const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { bracket } = await createBracket({
+    title: "Recovery Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt,
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const firstRound = bracket.rounds[0];
+  const nextRound = bracket.rounds[1];
+  firstRound.status = "tiebreaker";
+  firstRound.matchups[0].status = "needs_tiebreaker";
+  firstRound.matchups[0].winnerEntrantId = null;
+
+  nextRound.status = "live";
+  nextRound.matchups[0].status = "live";
+  nextRound.matchups[0].winnerEntrantId = nextRound.matchups[0].entrantAId;
+  nextRound.matchups[0].votes.push({
+    id: "broken-vote",
+    rosterMemberId: bracket.rosterMembers[0].id,
+    entrantId: nextRound.matchups[0].entrantAId!,
+    createdAt: new Date().toISOString(),
+  });
+
+  advanceBracket(bracket, new Date(Date.now() + 60 * 60 * 1000));
+
+  assert.equal(nextRound.status, "upcoming");
+  assert.equal(nextRound.matchups[0].status, "pending");
+  assert.equal(nextRound.matchups[0].winnerEntrantId, null);
+  assert.equal(nextRound.matchups[0].votes.length, 0);
+});
+
+test("resolveTieBreaker recovers malformed tie state and still allows admin resolution", async () => {
+  await resetStore();
+  const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { bracket, adminToken } = await createBracket({
+    title: "Corrupted Tie State",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt,
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const semiA = bracket.rounds[0].matchups[0];
+  const semiB = bracket.rounds[0].matchups[1];
+
+  let updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: semiA.id,
+    entrantId: semiA.entrantAId!,
+    rosterMemberId: bracket.rosterMembers[0].id,
+  });
+  updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: semiA.id,
+    entrantId: semiA.entrantBId!,
+    rosterMemberId: bracket.rosterMembers[1].id,
+  });
+  updated = await castVote({
+    publicToken: bracket.publicToken,
+    matchupId: semiB.id,
+    entrantId: semiB.entrantAId!,
+    rosterMemberId: bracket.rosterMembers[2].id,
+  });
+
+  advanceBracket(updated, new Date(Date.now() + 60 * 60 * 1000));
+  updated.rounds[0].status = "closed";
+  updated.rounds[0].matchups[0].status = "closed";
+  updated.rounds[1].status = "live";
+  updated.rounds[1].matchups[0].status = "live";
+  await writeStore({ brackets: [updated] });
+
+  const resolved = await resolveTieBreaker({
+    adminToken,
+    matchupId: semiA.id,
+    winnerEntrantId: semiA.entrantAId!,
+  });
+
+  assert.equal(resolved.rounds[0].matchups[0].winnerEntrantId, semiA.entrantAId);
+  assert.equal(resolved.rounds[0].status, "closed");
+  assert.equal(resolved.rounds[1].matchups[0].entrantAId, semiA.entrantAId);
 });
 
 test("buildSnapshot marks a roster member green only after finishing the whole current round", async () => {
@@ -206,6 +298,45 @@ test("buildSnapshot marks a roster member green only after finishing the whole c
   assert.equal(snapshot.currentRoundUniqueVoters, 1);
   assert.equal(snapshot.rounds[0].matchups[0].voteState.canVote, false);
   assert.equal(snapshot.selectedRosterMemberId, voterId);
+});
+
+test("buildSnapshot treats equivalent roster names as one voter identity", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
+    title: "Chocolate Bar Showdown",
+    seedingMode: "manual",
+    entrants: ["Mars", "Twix", "Kit Kat", "Aero"],
+    rosterMembers: roster,
+    startsAt: new Date().toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const canonicalJennieId = "legacy-jennie";
+  const duplicateJennieId = "legacy-jennie-space";
+  bracket.rosterMembers.push({ id: canonicalJennieId, name: "Jennie" });
+  bracket.rosterMembers.push({ id: duplicateJennieId, name: "  jennie  " });
+  bracket.totalPlayers = bracket.rosterMembers.length;
+
+  for (const matchup of bracket.rounds[0].matchups) {
+    matchup.votes.push({
+      id: `vote-${matchup.id}`,
+      rosterMemberId: duplicateJennieId,
+      entrantId: matchup.entrantAId!,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  const snapshot = buildSnapshot(bracket, { rosterMemberId: canonicalJennieId });
+  const canonicalStatus = snapshot.currentRoundRosterStatuses.find(
+    (entry) => entry.rosterMemberId === canonicalJennieId,
+  );
+  const duplicateStatus = snapshot.currentRoundRosterStatuses.find(
+    (entry) => entry.rosterMemberId === duplicateJennieId,
+  );
+
+  assert.equal(canonicalStatus?.hasVoted, true);
+  assert.equal(duplicateStatus?.hasVoted, true);
 });
 
 test("buildSnapshot points at the next upcoming round before voting opens", async () => {
