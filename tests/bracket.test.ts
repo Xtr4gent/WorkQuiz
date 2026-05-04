@@ -206,6 +206,29 @@ test("advanceBracket recovers from a prematurely live next round when ties are u
   assert.equal(nextRound.matchups[0].votes.length, 0);
 });
 
+test("advanceBracket promotes newly populated pending matchups in a live round", async () => {
+  await resetStore();
+  const { bracket } = await createBracket({
+    title: "Live Matchup Activation",
+    seedingMode: "manual",
+    entrants: ["A", "B", "C", "D", "E", "F", "G", "H"],
+    rosterMembers: roster,
+    startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    totalPlayers: roster.length,
+    roundDurationHours: 1,
+  });
+
+  const roundTwo = bracket.rounds[1];
+  roundTwo.status = "live";
+  roundTwo.matchups[0].status = "pending";
+  roundTwo.matchups[0].entrantAId = bracket.entrants[0].id;
+  roundTwo.matchups[0].entrantBId = bracket.entrants[1].id;
+
+  advanceBracket(bracket, new Date());
+
+  assert.equal(roundTwo.matchups[0].status, "live");
+});
+
 test("resolveTieBreaker recovers malformed tie state and still allows admin resolution", async () => {
   await resetStore();
   const startsAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();

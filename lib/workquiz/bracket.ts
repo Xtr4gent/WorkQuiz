@@ -462,6 +462,18 @@ export function advanceBracket(bracket: BracketRecord, now = new Date()) {
       continue;
     }
 
+    for (const matchup of round.matchups) {
+      if (
+        matchup.status === "pending" &&
+        matchup.entrantAId &&
+        matchup.entrantBId &&
+        !matchup.winnerEntrantId
+      ) {
+        matchup.status = "live";
+        matchup.updatedAt = nowIso;
+      }
+    }
+
     if (new Date(round.endsAt).getTime() > now.getTime()) {
       continue;
     }
